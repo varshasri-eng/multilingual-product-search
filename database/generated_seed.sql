@@ -2,12 +2,157 @@
 -- Source: dataset/products.xlsx
 -- Safe to re-run: uses NOT EXISTS / ON CONFLICT guards.
 
+INSERT INTO categories (category_name) VALUES ('Grocery') ON CONFLICT (category_name) DO NOTHING;
+INSERT INTO categories (category_name) VALUES ('Karam Powders') ON CONFLICT (category_name) DO NOTHING;
 INSERT INTO categories (category_name) VALUES ('Leaves') ON CONFLICT (category_name) DO NOTHING;
+INSERT INTO categories (category_name) VALUES ('Pickle Items') ON CONFLICT (category_name) DO NOTHING;
+INSERT INTO categories (category_name) VALUES ('Spices') ON CONFLICT (category_name) DO NOTHING;
 
-INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url)
-SELECT category_id, 'Mehandi Leaves (Fresh)', 'Lawsonia inermis', 'Freshly harvested Mehandi (Gorintaku) leaves, carefully packed for freshness. Ideal for preparing natural henna paste and for use during traditional festivals, pujas, weddings, and other auspicious occasions.', 18, 93, NULL
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Mehandi Leaves (Fresh)', 'Lawsonia inermis', 'Freshly harvested Mehandi (Gorintaku) leaves, carefully packed for freshness. Ideal for preparing natural henna paste and for use during traditional festivals, pujas, weddings, and other auspicious occasions.', 18, 93, NULL, 'LEA-COS-001'
 FROM categories WHERE category_name = 'Leaves'
 AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Mehandi Leaves (Fresh)');
+UPDATE products SET product_code = 'LEA-COS-001' WHERE product_name = 'Mehandi Leaves (Fresh)' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Turmeric Powder', 'Curcuma longa', 'Pure, stone-ground turmeric powder made from sun-dried rhizomes. Widely used in cooking, skincare routines, and traditional remedies.', 9.99, 150, NULL, 'SPI-PWD-001'
+FROM categories WHERE category_name = 'Spices'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Turmeric Powder');
+UPDATE products SET product_code = 'SPI-PWD-001' WHERE product_name = 'Turmeric Powder' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Betel Leaves', 'Piper betle', 'Fresh betel leaves, traditionally used in paan and religious ceremonies.', 0.85, 966, NULL, 'LEA-RIT-001'
+FROM categories WHERE category_name = 'Leaves'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Betel Leaves');
+UPDATE products SET product_code = 'LEA-RIT-001' WHERE product_name = 'Betel Leaves' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Mango Leaves', 'Mangifera indica', 'Fresh mango leaves, used for festive door decorations (toranam) and religious occasions.', 3.5, 92, NULL, 'LEA-RIT-002'
+FROM categories WHERE category_name = 'Leaves'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Mango Leaves');
+UPDATE products SET product_code = 'LEA-RIT-002' WHERE product_name = 'Mango Leaves' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Neem Leaves', 'Azadirachta indica', 'Fresh neem leaves, used in traditional remedies and religious rituals.', 3, 100, NULL, 'LEA-RIT-003'
+FROM categories WHERE category_name = 'Leaves'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Neem Leaves');
+UPDATE products SET product_code = 'LEA-RIT-003' WHERE product_name = 'Neem Leaves' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Bhel Patra', 'Aegle marmelos', 'Bilva (bel) leaves, traditionally offered during Shiva puja.', 1, 80, NULL, 'LEA-RIT-004'
+FROM categories WHERE category_name = 'Leaves'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Bhel Patra');
+UPDATE products SET product_code = 'LEA-RIT-004' WHERE product_name = 'Bhel Patra' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Amla Pickle', NULL, 'Traditional Andhra-style amla (Indian gooseberry) pickle.', 6, 50, NULL, 'PIK-VEG-001'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Amla Pickle');
+UPDATE products SET product_code = 'PIK-VEG-001' WHERE product_name = 'Amla Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Andhra Avakaya Pickle (Mango)', NULL, 'Traditional spicy Andhra mango pickle made with raw mango, red chilli, and mustard.', 6, 50, NULL, 'PIK-VEG-002'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)');
+UPDATE products SET product_code = 'PIK-VEG-002' WHERE product_name = 'Andhra Avakaya Pickle (Mango)' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Andhra Tomato Pickle', NULL, 'Spicy Andhra-style tomato pickle.', 5.85, 50, NULL, 'PIK-VEG-003'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Andhra Tomato Pickle');
+UPDATE products SET product_code = 'PIK-VEG-003' WHERE product_name = 'Andhra Tomato Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Bittergourd Pickle', NULL, 'Andhra-style bitter gourd pickle.', 5.85, 50, NULL, 'PIK-VEG-004'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Bittergourd Pickle');
+UPDATE products SET product_code = 'PIK-VEG-004' WHERE product_name = 'Bittergourd Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Brinjal Pickle', NULL, 'Traditional brinjal (eggplant) pickle.', 5.85, 50, NULL, 'PIK-VEG-005'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Brinjal Pickle');
+UPDATE products SET product_code = 'PIK-VEG-005' WHERE product_name = 'Brinjal Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Gongura Pickle', NULL, 'Traditional Andhra gongura (sorrel leaves) pickle, tangy and spicy.', 6, 50, NULL, 'PIK-VEG-006'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Gongura Pickle');
+UPDATE products SET product_code = 'PIK-VEG-006' WHERE product_name = 'Gongura Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Green Chilli Pickle', NULL, 'Spicy green chilli pickle.', 5.85, 50, NULL, 'PIK-VEG-007'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Green Chilli Pickle');
+UPDATE products SET product_code = 'PIK-VEG-007' WHERE product_name = 'Green Chilli Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Karivepaku Pickle', NULL, 'Curry leaves pickle, aromatic and spicy, an Andhra specialty.', 5.92, 50, NULL, 'PIK-VEG-008'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Karivepaku Pickle');
+UPDATE products SET product_code = 'PIK-VEG-008' WHERE product_name = 'Karivepaku Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Kothimeera Pickle', NULL, 'Coriander leaves pickle, a tangy Andhra specialty.', 5.92, 50, NULL, 'PIK-VEG-009'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Kothimeera Pickle');
+UPDATE products SET product_code = 'PIK-VEG-009' WHERE product_name = 'Kothimeera Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Drumstick Pickle', NULL, 'Traditional drumstick (moringa) pickle.', 5.78, 50, NULL, 'PIK-VEG-010'
+FROM categories WHERE category_name = 'Pickle Items'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Drumstick Pickle');
+UPDATE products SET product_code = 'PIK-VEG-010' WHERE product_name = 'Drumstick Pickle' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Anand Finger Millets', 'Eleusine coracana', 'Finger millet flour, a nutritious traditional grain.', 6.99, 9, NULL, 'GRO-GRN-001'
+FROM categories WHERE category_name = 'Grocery'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Anand Finger Millets');
+UPDATE products SET product_code = 'GRO-GRN-001' WHERE product_name = 'Anand Finger Millets' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Anand Little Millet', 'Panicum sumatrense', 'Little millet, a traditional nutritious grain.', 6.99, 6, NULL, 'GRO-GRN-002'
+FROM categories WHERE category_name = 'Grocery'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Anand Little Millet');
+UPDATE products SET product_code = 'GRO-GRN-002' WHERE product_name = 'Anand Little Millet' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Premium Small Peanuts', 'Arachis hypogaea', 'Small variety raw peanuts.', 8.99, 2, NULL, 'GRO-NUT-001'
+FROM categories WHERE category_name = 'Grocery'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Premium Small Peanuts');
+UPDATE products SET product_code = 'GRO-NUT-001' WHERE product_name = 'Premium Small Peanuts' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Deep Sooji Rava', NULL, 'Fine semolina (sooji/rava), used for upma, halwa and more.', 4.99, 16, NULL, 'GRO-GRN-003'
+FROM categories WHERE category_name = 'Grocery'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Deep Sooji Rava');
+UPDATE products SET product_code = 'GRO-GRN-003' WHERE product_name = 'Deep Sooji Rava' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Bambino Roasted Vermicelli', NULL, 'Roasted vermicelli, ready for upma and kheer preparations.', 2.49, 6, NULL, 'GRO-GRN-004'
+FROM categories WHERE category_name = 'Grocery'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Bambino Roasted Vermicelli');
+UPDATE products SET product_code = 'GRO-GRN-004' WHERE product_name = 'Bambino Roasted Vermicelli' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Idli Karam Podi', NULL, 'Spiced lentil powder traditionally eaten with idli and dosa.', 6.28, 20, NULL, 'KAR-PWD-001'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Idli Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-001' WHERE product_name = 'Idli Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Kandi Karam Podi', NULL, 'Toor dal-based spice powder, a staple Andhra side for rice.', 6.28, 20, NULL, 'KAR-PWD-002'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Kandi Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-002' WHERE product_name = 'Kandi Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Karivepaku Karam Podi', NULL, 'Curry leaf spice powder, aromatic and eaten with rice or idli.', 6.43, 20, NULL, 'KAR-PWD-003'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Karivepaku Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-003' WHERE product_name = 'Karivepaku Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Kobbari Karam Podi', NULL, 'Coconut-based spice powder, a South Indian staple.', 6.5, 20, NULL, 'KAR-PWD-004'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Kobbari Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-004' WHERE product_name = 'Kobbari Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Kothimeera Karam Podi', NULL, 'Coriander leaf spice powder, tangy and aromatic.', 6.43, 20, NULL, 'KAR-PWD-005'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Kothimeera Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-005' WHERE product_name = 'Kothimeera Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Nuvvula Karam Podi', NULL, 'Sesame seed spice powder, nutty and rich.', 6.43, 20, NULL, 'KAR-PWD-006'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Nuvvula Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-006' WHERE product_name = 'Nuvvula Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Palli Karam Podi', NULL, 'Peanut-based spice powder, a popular rice accompaniment.', 6.5, 20, NULL, 'KAR-PWD-007'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Palli Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-007' WHERE product_name = 'Palli Karam Podi' AND product_code IS NULL;
+INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)
+SELECT category_id, 'Pudina Karam Podi', NULL, 'Mint leaf spice powder, refreshing and spicy.', 6.43, 20, NULL, 'KAR-PWD-008'
+FROM categories WHERE category_name = 'Karam Powders'
+AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = 'Pudina Karam Podi');
+UPDATE products SET product_code = 'KAR-PWD-008' WHERE product_name = 'Pudina Karam Podi' AND product_code IS NULL;
 
 INSERT INTO search_terms (product_id, search_term, term_type, language)
 SELECT product_id, 'mehandi leaves', 'official', NULL
@@ -81,4 +226,619 @@ INSERT INTO search_terms (product_id, search_term, term_type, language)
 SELECT product_id, '#naturaldye', 'hashtag', NULL
 FROM products WHERE product_name = 'Mehandi Leaves (Fresh)'
 ON CONFLICT (product_id, search_term) DO NOTHING;
-
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'turmeric powder', 'official', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'turmeric', 'alias', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'haldi', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pasupu', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'manjal', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'arishina', 'regional', 'Kannada'
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'curcuma', 'alias', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'turmaric', 'typo', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'tumeric', 'typo', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'haldii', 'typo', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#turmeric', 'hashtag', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#haldi', 'hashtag', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#naturalspice', 'hashtag', NULL
+FROM products WHERE product_name = 'Turmeric Powder'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'paan leaves', 'alias', NULL
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'tamboolam', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'vetrilai', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'paan aaku', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'beetle leaves', 'typo', NULL
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#betelleaves', 'hashtag', NULL
+FROM products WHERE product_name = 'Betel Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mamidi aaku', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Mango Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mangai ilai', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Mango Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'toranam leaves', 'alias', NULL
+FROM products WHERE product_name = 'Mango Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mango tree leaves', 'typo', NULL
+FROM products WHERE product_name = 'Mango Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#mangoleaves', 'hashtag', NULL
+FROM products WHERE product_name = 'Mango Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'vepaku', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'veppilai', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'margosa leaves', 'alias', NULL
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'neem patta', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'niim leaves', 'typo', NULL
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#neemleaves', 'hashtag', NULL
+FROM products WHERE product_name = 'Neem Leaves'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bilva patra', 'alias', NULL
+FROM products WHERE product_name = 'Bhel Patra'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bel patta', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Bhel Patra'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'maredu aaku', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Bhel Patra'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bael leaves', 'typo', NULL
+FROM products WHERE product_name = 'Bhel Patra'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#bhelpatra', 'hashtag', NULL
+FROM products WHERE product_name = 'Bhel Patra'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'usirikaya pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'nellikai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'gooseberry pickle', 'alias', NULL
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'amla achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'amala pickle', 'typo', NULL
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#amlapickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Amla Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'avakaya', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'aavakaya', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mango pickle', 'alias', NULL
+FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'avakai', 'typo', NULL
+FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#avakaya', 'hashtag', NULL
+FROM products WHERE product_name = 'Andhra Avakaya Pickle (Mango)'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'tomato pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Andhra Tomato Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'thakkali pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Andhra Tomato Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'tamata achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Andhra Tomato Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'tamato pickle', 'typo', NULL
+FROM products WHERE product_name = 'Andhra Tomato Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#tomatopickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Andhra Tomato Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kakarakaya pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pavakkai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'karela pickle', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bitter gourd pickle', 'alias', NULL
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bittergourd achar', 'typo', NULL
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#bittergourdpickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Bittergourd Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'vankaya pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kathirikai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'baingan achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'eggplant pickle', 'alias', NULL
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'brinjal achar', 'typo', NULL
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#brinjalpickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Brinjal Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'gongura pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Gongura Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pulicha keerai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Gongura Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'sorrel leaves pickle', 'alias', NULL
+FROM products WHERE product_name = 'Gongura Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'gonkura pickle', 'typo', NULL
+FROM products WHERE product_name = 'Gongura Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#gongura', 'hashtag', NULL
+FROM products WHERE product_name = 'Gongura Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pachi mirapakaya pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Green Chilli Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'milagai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Green Chilli Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'hari mirch achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Green Chilli Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'green chili pickle', 'typo', NULL
+FROM products WHERE product_name = 'Green Chilli Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#greenchillipickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Green Chilli Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'curry leaves pickle', 'alias', NULL
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'karivepaku pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kariveppilai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'curry patta achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'karivepaku pickel', 'typo', NULL
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#curryleavespickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Karivepaku Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'coriander pickle', 'alias', NULL
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kothimeera pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kothamalli pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'dhaniya achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kothimira pickle', 'typo', NULL
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#corianderpickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Kothimeera Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'munagakaya pachadi', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'murungakkai pickle', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'moringa pickle', 'alias', NULL
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'sahjan achar', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'drum stick pickle', 'typo', NULL
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#drumstickpickle', 'hashtag', NULL
+FROM products WHERE product_name = 'Drumstick Pickle'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'ragi', 'regional', 'Telugu/Kannada'
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'ragulu', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'nachni', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'finger millet flour', 'alias', NULL
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'ragee', 'typo', NULL
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#fingermillet', 'hashtag', NULL
+FROM products WHERE product_name = 'Anand Finger Millets'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'samalu', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'samai', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kutki', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'little millet flour', 'alias', NULL
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'littel millet', 'typo', NULL
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#littlemillet', 'hashtag', NULL
+FROM products WHERE product_name = 'Anand Little Millet'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'verusenaga pappu', 'regional', 'Telugu'
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'verkadalai', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mungfali', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'groundnuts', 'alias', NULL
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'peanutts', 'typo', NULL
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#peanuts', 'hashtag', NULL
+FROM products WHERE product_name = 'Premium Small Peanuts'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'sooji', 'alias', 'Hindi'
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'rava', 'regional', 'Telugu/Tamil'
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'semolina', 'alias', NULL
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'bombay rava', 'alias', NULL
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'suji', 'typo', NULL
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#semolina', 'hashtag', NULL
+FROM products WHERE product_name = 'Deep Sooji Rava'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'semiya', 'regional', 'Tamil/Telugu'
+FROM products WHERE product_name = 'Bambino Roasted Vermicelli'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'sevai', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Bambino Roasted Vermicelli'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'vermicilli', 'typo', NULL
+FROM products WHERE product_name = 'Bambino Roasted Vermicelli'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'roasted semiya', 'alias', NULL
+FROM products WHERE product_name = 'Bambino Roasted Vermicelli'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#vermicelli', 'hashtag', NULL
+FROM products WHERE product_name = 'Bambino Roasted Vermicelli'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'idli podi', 'alias', NULL
+FROM products WHERE product_name = 'Idli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'idli milagai podi', 'regional', 'Tamil'
+FROM products WHERE product_name = 'Idli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'idly karam', 'typo', NULL
+FROM products WHERE product_name = 'Idli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#idlipodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Idli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kandi podi', 'alias', NULL
+FROM products WHERE product_name = 'Kandi Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'toor dal powder', 'alias', NULL
+FROM products WHERE product_name = 'Kandi Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kandhi karam', 'typo', NULL
+FROM products WHERE product_name = 'Kandi Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#kandipodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Kandi Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'curry leaf powder', 'alias', NULL
+FROM products WHERE product_name = 'Karivepaku Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'karivepaku podi', 'alias', 'Telugu'
+FROM products WHERE product_name = 'Karivepaku Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'curry leaves karam', 'typo', NULL
+FROM products WHERE product_name = 'Karivepaku Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#curryleafpowder', 'hashtag', NULL
+FROM products WHERE product_name = 'Karivepaku Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'coconut podi', 'alias', NULL
+FROM products WHERE product_name = 'Kobbari Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kobbari podi', 'alias', 'Telugu'
+FROM products WHERE product_name = 'Kobbari Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kobbari karam', 'typo', NULL
+FROM products WHERE product_name = 'Kobbari Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#coconutpodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Kobbari Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'coriander podi', 'alias', NULL
+FROM products WHERE product_name = 'Kothimeera Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kothimeera podi', 'alias', 'Telugu'
+FROM products WHERE product_name = 'Kothimeera Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'kothimira karam', 'typo', NULL
+FROM products WHERE product_name = 'Kothimeera Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#corianderpodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Kothimeera Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'sesame podi', 'alias', NULL
+FROM products WHERE product_name = 'Nuvvula Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'nuvvula podi', 'alias', 'Telugu'
+FROM products WHERE product_name = 'Nuvvula Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'til powder', 'regional', 'Hindi'
+FROM products WHERE product_name = 'Nuvvula Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'nuvulla karam', 'typo', NULL
+FROM products WHERE product_name = 'Nuvvula Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#sesamepodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Nuvvula Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'peanut podi', 'alias', NULL
+FROM products WHERE product_name = 'Palli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'palli podi', 'alias', 'Telugu'
+FROM products WHERE product_name = 'Palli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'groundnut powder', 'alias', NULL
+FROM products WHERE product_name = 'Palli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pally karam', 'typo', NULL
+FROM products WHERE product_name = 'Palli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#peanutpodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Palli Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'mint podi', 'alias', NULL
+FROM products WHERE product_name = 'Pudina Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pudina podi', 'alias', 'Telugu/Hindi'
+FROM products WHERE product_name = 'Pudina Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, 'pudhina karam', 'typo', NULL
+FROM products WHERE product_name = 'Pudina Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;
+INSERT INTO search_terms (product_id, search_term, term_type, language)
+SELECT product_id, '#mintpodi', 'hashtag', NULL
+FROM products WHERE product_name = 'Pudina Karam Podi'
+ON CONFLICT (product_id, search_term) DO NOTHING;

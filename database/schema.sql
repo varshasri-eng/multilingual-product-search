@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS products (
     price            DECIMAL(10,2),
     stock_quantity   INT DEFAULT 0,
     image_url        TEXT,
+    -- Hierarchical SKU: CATEGORY-SUBTYPE-SEQUENCE (e.g. 'PIK-VEG-004').
+    -- Products sharing the first two segments are closely related;
+    -- sharing just the category segment are loosely related. See
+    -- database/populate_related_products.sql for how this drives
+    -- automatic related_products population.
+    product_code     VARCHAR(30) UNIQUE,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -89,5 +95,3 @@ CREATE TABLE IF NOT EXISTS related_products (
     CONSTRAINT no_self_relation CHECK (product_id <> related_product_id),
     UNIQUE (product_id, related_product_id)
 );
-
-
