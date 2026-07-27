@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: s2h_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: indian_product_search
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs every .sql file here, in filename order, but ONLY on a
+      # completely empty data volume (first run). If you've already
+      # run this before and want a truly fresh database, you need to
+      # `docker compose down -v` first to wipe the volume.
+      - ./docker/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend-python
+    container_name: s2h_backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres  # service name, not localhost — Docker's
+                         # internal DNS resolves this to the postgres
+                         # container automatically
+      DB_PORT: 5432
+      DB_NAME: indian_product_search
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      PORT: 5000
+      SECRET_KEY: dev-only-secret-change-before-real-deployment
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend-python:/app  # bind mount so Flask's reloader picks
+                                # up code edits without rebuilding
+
+  frontend:
+    build: ./frontend-react
+    container_name: s2h_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend-react:/app
+      - /app/node_modules  # anonymous volume — keeps the container's
+                            # own node_modules from being overwritten
+                            # by the bind mount above
+
+volumes:
+  pgdata:

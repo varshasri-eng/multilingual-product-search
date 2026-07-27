@@ -36,7 +36,7 @@ def load_products(ws):
     for row in rows:
         if not row or not row[0]:
             continue
-        name, category, sci_name, desc, price, stock, image_url, product_code = (list(row) + [None] * 8)[:8]
+        name, category, sci_name, desc, price, stock, image_url, product_code, weight = (list(row) + [None] * 9)[:9]
         products.append({
             "product_name": name,
             "category": category,
@@ -46,6 +46,7 @@ def load_products(ws):
             "stock_quantity": stock if stock not in (None, "") else 0,
             "image_url": image_url,
             "product_code": product_code if product_code not in (None, "") else None,
+            "weight": weight if weight not in (None, "") else None,
         })
     return products
 
@@ -133,10 +134,10 @@ def main():
     # Products
     for p in products:
         lines.append(
-            "INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code)\n"
+            "INSERT INTO products (category_id, product_name, scientific_name, description, price, stock_quantity, image_url, product_code, weight)\n"
             "SELECT category_id, "
             f"{esc(p['product_name'])}, {esc(p['scientific_name'])}, {esc(p['description'])}, "
-            f"{p['price']}, {p['stock_quantity']}, {esc(p['image_url'])}, {esc(p['product_code'])}\n"
+            f"{p['price']}, {p['stock_quantity']}, {esc(p['image_url'])}, {esc(p['product_code'])}, {esc(p['weight'])}\n"
             f"FROM categories WHERE category_name = {esc(p['category'])}\n"
             f"AND NOT EXISTS (SELECT 1 FROM products WHERE product_name = {esc(p['product_name'])});"
         )
@@ -147,6 +148,11 @@ def main():
             lines.append(
                 f"UPDATE products SET product_code = {esc(p['product_code'])} "
                 f"WHERE product_name = {esc(p['product_name'])} AND product_code IS NULL;"
+            )
+        if p["weight"] is not None:
+            lines.append(
+                f"UPDATE products SET weight = {esc(p['weight'])} "
+                f"WHERE product_name = {esc(p['product_name'])} AND weight IS NULL;"
             )
     lines.append("")
 
