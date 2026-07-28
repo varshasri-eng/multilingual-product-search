@@ -61,3 +61,21 @@ export async function searchByKeyword(keyword) {
   });
   return res.data;
 }
+
+// ---- Auth ----
+export async function registerCustomer(name, email, password, phone) {
+  const res = await client.post("/api/auth/register", { name, email, password, phone });
+  return res.data; // { token, customer }
+}
+
+export async function loginCustomer(email, password) {
+  const res = await client.post("/api/auth/login", { email, password });
+  return res.data; // { token, customer }
+}
+
+export async function getCurrentCustomer(token) {
+  const res = await client.get("/api/auth/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}

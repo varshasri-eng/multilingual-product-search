@@ -9,6 +9,7 @@ import SearchResults from "../components/SearchResults";
 import Breadcrumbs from "../components/Breadcrumbs";
 import Footer from "../components/Footer";
 import CartButton from "../components/CartButton";
+import AuthButton from "../components/AuthButton";
 import { getProduct, getRelatedByProductId, searchProducts, getRecentlyViewed } from "../api";
 
 export default function ProductDetailsPage() {
@@ -88,6 +89,7 @@ export default function ProductDetailsPage() {
             Store2Home
           </Typography>
           <SearchBar onSearch={handleSearch} />
+          <AuthButton />
           <CartButton />
         </Toolbar>
       </AppBar>
