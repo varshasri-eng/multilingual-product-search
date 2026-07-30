@@ -1,0 +1,133 @@
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { logout } from "../api/auth";
+import toast from "react-hot-toast";
+import {
+  FiUser, FiMapPin, FiLogOut, FiHome,
+  FiShoppingBag, FiUsers, FiBell, FiSettings,
+  FiChevronRight,
+} from "react-icons/fi";
+
+const NAV_ITEMS = [
+  {
+    section: "My Account",
+    links: [
+      { to: "/account/profile",   icon: <FiUser size={15} />,        label: "Profile" },
+      { to: "/account/addresses", icon: <FiMapPin size={15} />,      label: "Addresses" },
+      { to: "/account/orders",    icon: <FiShoppingBag size={15} />, label: "Orders" },
+    ],
+  },
+  {
+    section: "Household",
+    links: [
+      { to: "/account/family",    icon: <FiUsers size={15} />,  label: "Family Group" },
+    ],
+  },
+  {
+    section: "Preferences",
+    links: [
+      { to: "/account/notifications", icon: <FiBell size={15} />,     label: "Notifications" },
+      { to: "/account/settings",      icon: <FiSettings size={15} />, label: "Settings" },
+    ],
+  },
+];
+
+export default function CustomerLayout() {
+  const { customer, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try { await logout(); } catch (_) {}
+    signOut();
+    navigate("/login");
+    toast.success("Logged out.");
+  };
+
+  const navClass = ({ isActive }) =>
+    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
+     group relative
+     ${isActive
+       ? "bg-brand-50 text-brand-700"
+       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`;
+
+  return (
+    <div className="min-h-screen flex bg-gray-50">
+      {/* ── Sidebar ─────────────────────────────────────── */}
+      <aside className="w-60 bg-white border-r border-gray-100 flex flex-col py-5 px-3
+                        sticky top-0 h-screen overflow-y-auto">
+
+        {/* Logo */}
+        <div className="flex items-center gap-2 mb-6 px-2">
+          <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center">
+            <FiHome className="text-white" size={14} />
+          </div>
+          <span className="font-bold text-gray-900">Store2Home</span>
+        </div>
+
+        {/* Customer avatar + info */}
+        <div className="mx-2 mb-6 p-3 bg-gray-50 rounded-xl">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center
+                            flex-shrink-0 text-brand-600 font-bold text-sm">
+              {(customer?.name || customer?.phone || "?")[0].toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">
+                {customer?.name && customer.name !== customer?.phone
+                  ? customer.name
+                  : "My Account"}
+              </p>
+              <p className="text-xs text-gray-400 truncate">
+                {customer?.email || customer?.phone}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav sections */}
+        <nav className="flex-1 space-y-5">
+          {NAV_ITEMS.map((section) => (
+            <div key={section.section}>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider
+                            px-3 mb-1">
+                {section.section}
+              </p>
+              <div className="space-y-0.5">
+                {section.links.map((link) => (
+                  <NavLink key={link.to} to={link.to} className={navClass}>
+                    {({ isActive }) => (
+                      <>
+                        <span className={`flex-shrink-0 transition-colors
+                          ${isActive ? "text-brand-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                          {link.icon}
+                        </span>
+                        <span className="flex-1">{link.label}</span>
+                        {isActive && (
+                          <FiChevronRight size={12} className="text-brand-400 flex-shrink-0" />
+                        )}
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-red-500
+                     hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors mt-4 mx-0">
+          <FiLogOut size={15} className="flex-shrink-0" />
+          Sign out
+        </button>
+      </aside>
+
+      {/* ── Main content ─────────────────────────────────── */}
+      <main className="flex-1 p-8 overflow-y-auto min-h-screen">
+        <Outlet />
+      </main>
+    </div>
+  );
+}

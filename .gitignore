@@ -141,3 +141,29 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# --- Store2Home specific ---
+# PostgreSQL local data
+pgdata/
+pgadmin_data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# React / Node (local overrides)
+frontend/build/
+frontend/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

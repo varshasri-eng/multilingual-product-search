@@ -1,0 +1,79 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — main database
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: store2home_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # pgAdmin — browser GUI at http://localhost:5051
+  # ─────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: store2home_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5051:80"
+    volumes:
+      - ./pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────────
+  # Flask — backend API at http://localhost:5000
+  # ─────────────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: store2home_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      FLASK_ENV: ${FLASK_ENV}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      FLASK_APP: wsgi.py
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: flask run --host=0.0.0.0 --port=5000
+
+  # ─────────────────────────────────────────────
+  # React — public portal at http://localhost:3000
+  # ─────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: store2home_frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
