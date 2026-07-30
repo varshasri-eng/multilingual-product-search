@@ -1,29 +1,64 @@
-# multilingual-product-search
-An intelligent e-commerce search system supporting regional product aliases, fuzzy matching, typo correction, and visual product search.
-## Development Log
+# Store2Home
 
-### 2026-07-17
-- Implemented full 6-table PostgreSQL schema (`categories`, `products`,
-  `product_images`, `search_terms`, `search_logs`, `related_products`)
-  in `database/schema.sql`, including a `pg_trgm` index for native
-  typo-tolerant search.
-- Built an Excel-based data entry pipeline: `dataset/products.xlsx` is
-  the editable source of truth; `dataset/import_dataset.py` converts it
-  into `database/generated_seed.sql`, validated against the schema
-  (rejects invalid `term_type` values and orphaned product references
-  before writing any SQL).
-- Loaded Phase 1 data: 2 products (Mehandi Leaves / Gorintaku, Turmeric
-  Powder / Haldi), 31 search terms across official names, regional
-  names, aliases, common typos, and hashtags.
-- Implemented `search_products()` — a ranked search function
-  (`database/search_function.sql`) combining fuzzy matching, term-type
-  priority (official > alias > regional > hashtag > typo), and
-  automatic logging of every search to `search_logs`, including
-  zero-result searches — the data source for identifying missing
-  aliases going forward.
-- Verified end-to-end: fuzzy search on a genuine misspelling
-  ("gorintuku") correctly resolves to the right product via `pg_trgm`,
-  with no external search engine involved.
+A full-stack grocery delivery platform for Lathrop and Mountain House, CA.
 
-**Next up:** rank-testing across both products, wiring `related_products`
-for the zero-result fallback, and reviewing `search_logs` for gaps.
+## Tech Stack
+
+- **Frontend:** React (Vite), Tailwind CSS
+- **Backend:** Python Flask, SQLAlchemy
+- **Database:** PostgreSQL
+- **Infra:** Docker Compose
+
+## Quick Start
+
+```bash
+# Clone the branch
+git clone -b store2home https://github.com/varshasri-eng/multilingual-product-search.git
+cd multilingual-product-search
+
+# Create .env file
+cp .env.example .env
+# Edit .env — set your own passwords and secrets
+
+# Start everything
+docker compose up -d
+```
+
+Once running:
+
+| Service | URL | Purpose |
+|---|---|---|
+| Customer portal | http://localhost:3000 | Register, login, dashboard |
+| Admin portal | http://localhost:3000/admin/login | Customer & staff management |
+| API | http://localhost:5001 | Flask backend |
+| pgAdmin | http://localhost:5051 | Database GUI |
+
+## Project Structure
+
+```
+├── backend/              # Flask API
+│   ├── app/
+│   │   ├── models/       # SQLAlchemy models
+│   │   ├── routes/       # API endpoints
+│   │   └── utils/        # Auth, OTP helpers
+│   └── wsgi.py
+├── frontend/             # React app
+│   └── src/
+│       ├── api/          # API client
+│       ├── components/   # Layouts
+│       ├── context/      # Auth context
+│       └── pages/        # account/, admin/, Login, Register
+├── db/
+│   └── schema.sql
+├── docker-compose.yml
+└── .env.example
+```
+
+## Features
+
+- Customer registration with OTP via email
+- Customer dashboard: Profile, Addresses, Orders, Family Group, Notifications, Settings
+- Admin portal: customer search & filter (name, phone, email, address, diet group, family group, order)
+- Staff management with role-based access (read, write, full)
+- Delivery zone enforcement (95330, 95391)
+- Family/household groups for shared ordering
