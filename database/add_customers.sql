@@ -17,3 +17,6 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers (email);
+
+-- Confirm it exists now.
+SELECT table_name FROM information_schema.tables WHERE table_name = 'customers';
