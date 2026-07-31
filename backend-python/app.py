@@ -4,6 +4,8 @@ from db import query
 import os
 from dotenv import load_dotenv
 import auth
+from datetime import date
+from delivery import get_earliest_delivery_date
 
 load_dotenv()
 
@@ -206,6 +208,56 @@ def search():
     rows = query("SELECT * FROM search_products(%s)", (keyword,))
     return jsonify({"query": keyword, "results": rows})
 
+# ============================================================
+# API 5 — GET /api/products/:id/availability
+# Returns the earliest valid delivery date for this product, given
+# its current stock and its restock rule (if any). Pure wrapper
+# around delivery.get_earliest_delivery_date() — see that file for
+# the actual date math, which is unit tested separately in
+# test_delivery.py.
+# ============================================================
+@app.route("/api/products/<int:product_id>/availability", methods=["GET"])
+def product_availability(product_id):
+    product = query(
+        "SELECT product_id, stock_quantity FROM products WHERE product_id = %s",
+        (product_id,), fetchone=True
+    )
+    if product is None:
+        return jsonify({"error": "product not found"}), 404
+
+    rule = query(
+        """SELECT restock_cycle, restock_day_of_week, restock_day_of_month, min_lead_days
+           FROM product_delivery_rules WHERE product_id = %s""",
+        (product_id,), fetchone=True
+    )
+
+    in_stock = product["stock_quantity"] is not None and product["stock_quantity"] > 0
+
+    if rule is None:
+        # No configured rule — no scheduling restriction beyond
+        # actual stock status (see add_delivery_rules.sql notes).
+        restock_cycle = "none"
+        restock_day_of_week = None
+        restock_day_of_month = None
+        min_lead_days = 0
+    else:
+        restock_cycle = rule["restock_cycle"]
+        restock_day_of_week = rule["restock_day_of_week"]
+        restock_day_of_month = rule["restock_day_of_month"]
+        min_lead_days = rule["min_lead_days"]
+
+    earliest_date = get_earliest_delivery_date(
+        date.today(), in_stock, restock_cycle,
+        restock_day_of_week, restock_day_of_month, min_lead_days
+    )
+
+    return jsonify({
+        "product_id": product_id,
+        "in_stock": in_stock,
+        "restock_cycle": restock_cycle,
+        "min_lead_days": min_lead_days,
+        "earliest_delivery_date": earliest_date.isoformat() if earliest_date else None,
+    })
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
