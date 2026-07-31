@@ -147,7 +147,32 @@ def list_customers(customer):
     if dietary and dietary in VALID_DIET:
         query = query.filter(Customer.dietary_preference == dietary)
 
-    query = query.order_by(Customer.created_at.desc())
+    # ── Sorting ──────────────────────────────────────────────
+    sort_by    = request.args.get("sort_by", "created_at").strip()
+    sort_order = request.args.get("sort_order", "desc").strip()
+    desc       = sort_order == "desc"
+
+    if sort_by == "name":
+        col = Customer.name
+    elif sort_by == "orders_count":
+        try:
+            from app.models.order import Order
+            order_count = db.select(
+                Order.customer_id, db.func.count(Order.id).label("cnt")
+            ).group_by(Order.customer_id).subquery()
+            query = query.outerjoin(
+                order_count, order_count.c.customer_id == Customer.id
+            )
+            query = query.order_by(
+                db.desc(order_count.c.cnt) if desc else db.asc(order_count.c.cnt)
+            ).order_by(Customer.id)
+        except Exception:
+            query = query.order_by(Customer.id.desc() if desc else Customer.id.asc())
+    else:
+        col = Customer.created_at
+
+    if sort_by != "orders_count":
+        query = query.order_by(col.desc() if desc else col.asc())
     paginated = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return jsonify({

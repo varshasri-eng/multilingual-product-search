@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import {
   FiUsers, FiSearch, FiEye,
   FiUserX, FiUserCheck, FiRefreshCw, FiChevronDown,
+  FiArrowUp, FiArrowDown,
   FiX,
 } from "react-icons/fi";
 
@@ -46,6 +47,10 @@ export default function CustomerList() {
   const [filterDietary, setFilterDietary]   = useState("");
   const [page, setPage]                     = useState(1);
 
+  // sort
+  const [sortBy, setSortBy]       = useState("created_at");
+  const [sortOrder, setSortOrder] = useState("desc");
+
   // ── load stats once ──────────────────────────────────────
   useEffect(() => {
     getCustomerStats().then((r) => setStats(r.data)).catch(() => {});
@@ -68,6 +73,9 @@ export default function CustomerList() {
     if (filterLanguage) params.language  = filterLanguage;
     if (filterDietary)  params.dietary   = filterDietary;
 
+    params.sort_by    = sortBy;
+    params.sort_order = sortOrder;
+
     listCustomers(params)
       .then((r) => {
         setCustomers(r.data.customers);
@@ -75,7 +83,7 @@ export default function CustomerList() {
       })
       .catch(() => toast.error("Failed to load customers."))
       .finally(() => setLoading(false));
-  }, [searchBy, searchQ, filterRole, filterStatus, filterLanguage, filterDietary, page]);
+  }, [searchBy, searchQ, filterRole, filterStatus, filterLanguage, filterDietary, page, sortBy, sortOrder]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -295,6 +303,30 @@ export default function CustomerList() {
               </span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ── Sort row ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-medium">Sort by</span>
+          <select
+            className="input text-xs h-8 py-0 w-36"
+            value={`${sortBy}_${sortOrder}`}
+            onChange={(e) => {
+              const [by, order] = e.target.value.split("_");
+              setSortBy(by);
+              setSortOrder(order);
+              resetPage();
+            }}>
+            <option value="created_at_desc">Newest first</option>
+            <option value="created_at_asc">Oldest first</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+            <option value="orders_count_desc">Most orders</option>
+            <option value="orders_count_asc">Least orders</option>
+          </select>
         </div>
       </div>
 

@@ -5,8 +5,9 @@ import toast from "react-hot-toast";
 import {
   FiUser, FiMapPin, FiLogOut, FiHome,
   FiShoppingBag, FiUsers, FiBell, FiSettings,
-  FiChevronRight,
+  FiChevronRight, FiChevronLeft,
 } from "react-icons/fi";
+import { useState } from "react";
 
 const NAV_ITEMS = [
   {
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
 export default function CustomerLayout() {
   const { customer, signOut } = useAuth();
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = async () => {
     try { await logout(); } catch (_) {}
@@ -45,42 +47,64 @@ export default function CustomerLayout() {
 
   const navClass = ({ isActive }) =>
     `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
-     group relative
+     group relative justify-start
      ${isActive
        ? "bg-brand-50 text-brand-700"
        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`;
 
+  const iconBox = "flex-shrink-0";
+
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside className="w-60 bg-white border-r border-gray-100 flex flex-col py-5 px-3
-                        sticky top-0 h-screen overflow-y-auto">
+      <aside className={`${collapsed ? "w-16" : "w-60"}
+                        bg-white border-r border-gray-100 flex flex-col py-5 px-2
+                        sticky top-0 h-screen overflow-y-auto transition-all duration-300`}>
 
         {/* Logo */}
-        <div className="flex items-center gap-2 mb-6 px-2">
-          <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center">
+        <div className={`flex items-center gap-2 mb-6 px-2 ${collapsed ? "justify-center px-0" : ""}`}>
+          <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center flex-shrink-0">
             <FiHome className="text-white" size={14} />
           </div>
-          <span className="font-bold text-gray-900">Store2Home</span>
+          {!collapsed && <span className="font-bold text-gray-900 whitespace-nowrap">Store2Home</span>}
+        </div>
+
+        {/* Home (above My Account) */}
+        <div className="mb-4">
+          <NavLink to="/account/home" className={navClass}>
+            {({ isActive }) => (
+              <>
+                <span className={`${iconBox} ${isActive ? "text-brand-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                  <FiHome size={16} />
+                </span>
+                {!collapsed && <span className="flex-1">Home</span>}
+                {!collapsed && isActive && (
+                  <FiChevronRight size={12} className="text-brand-400 flex-shrink-0" />
+                )}
+              </>
+            )}
+          </NavLink>
         </div>
 
         {/* Customer avatar + info */}
-        <div className="mx-2 mb-6 p-3 bg-gray-50 rounded-xl">
-          <div className="flex items-center gap-2.5">
+        <div className={`mb-6 ${collapsed ? "mx-0" : "mx-2"} p-3 bg-gray-50 rounded-xl`}>
+          <div className={`flex items-center gap-2.5 ${collapsed ? "justify-center px-0" : ""}`}>
             <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center
                             flex-shrink-0 text-brand-600 font-bold text-sm">
               {(customer?.name || customer?.phone || "?")[0].toUpperCase()}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">
-                {customer?.name && customer.name !== customer?.phone
-                  ? customer.name
-                  : "My Account"}
-              </p>
-              <p className="text-xs text-gray-400 truncate">
-                {customer?.email || customer?.phone}
-              </p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">
+                  {customer?.name && customer.name !== customer?.phone
+                    ? customer.name
+                    : "My Account"}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  {customer?.email || customer?.phone}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -88,21 +112,23 @@ export default function CustomerLayout() {
         <nav className="flex-1 space-y-5">
           {NAV_ITEMS.map((section) => (
             <div key={section.section}>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider
-                            px-3 mb-1">
-                {section.section}
-              </p>
+              {!collapsed && (
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider
+                              px-3 mb-1">
+                  {section.section}
+                </p>
+              )}
+              {collapsed && <div className="border-t border-gray-100 mb-2 mx-2" />}
               <div className="space-y-0.5">
                 {section.links.map((link) => (
                   <NavLink key={link.to} to={link.to} className={navClass}>
                     {({ isActive }) => (
                       <>
-                        <span className={`flex-shrink-0 transition-colors
-                          ${isActive ? "text-brand-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                        <span className={`${iconBox} ${isActive ? "text-brand-500" : "text-gray-400 group-hover:text-gray-600"}`}>
                           {link.icon}
                         </span>
-                        <span className="flex-1">{link.label}</span>
-                        {isActive && (
+                        {!collapsed && <span className="flex-1">{link.label}</span>}
+                        {!collapsed && isActive && (
                           <FiChevronRight size={12} className="text-brand-400 flex-shrink-0" />
                         )}
                       </>
@@ -114,13 +140,23 @@ export default function CustomerLayout() {
           ))}
         </nav>
 
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-400
+                     hover:bg-gray-50 hover:text-gray-600 rounded-lg transition-colors mb-1">
+          {collapsed
+            ? <FiChevronRight size={15} className="flex-shrink-0 mx-auto" />
+            : <><FiChevronLeft size={15} className="flex-shrink-0" /> Collapse</>}
+        </button>
+
         {/* Logout */}
         <button
           onClick={handleLogout}
           className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-red-500
-                     hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors mt-4 mx-0">
+                     hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
           <FiLogOut size={15} className="flex-shrink-0" />
-          Sign out
+          {!collapsed && "Sign out"}
         </button>
       </aside>
 

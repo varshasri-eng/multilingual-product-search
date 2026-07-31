@@ -8,6 +8,7 @@ import AdminLogin    from "./pages/admin/AdminLogin";
 import AdminRegister from "./pages/admin/AdminRegister";
 
 // Customer account pages
+import Home          from "./pages/account/Home";
 import Profile       from "./pages/account/Profile";
 import Addresses     from "./pages/account/Addresses";
 import Orders        from "./pages/account/Orders";
@@ -64,7 +65,8 @@ export default function App() {
         <Route path="/account" element={
           <ProtectedRoute><CustomerLayout /></ProtectedRoute>
         }>
-          <Route index element={<Navigate to="profile" replace />} />
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home"          element={<Home />} />
           <Route path="profile"       element={<Profile />} />
           <Route path="addresses"     element={<Addresses />} />
           <Route path="orders"        element={<Orders />} />
