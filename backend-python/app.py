@@ -258,7 +258,72 @@ def product_availability(product_id):
         "min_lead_days": min_lead_days,
         "earliest_delivery_date": earliest_date.isoformat() if earliest_date else None,
     })
+# ============================================================
+# Admin - stock and delivery-rule management. Requires role='admin'
+# on the customers row (see auth.require_admin). Nobody has this role
+# by default - promote a test account manually:
+#   UPDATE customers SET role = 'admin' WHERE email = '...';
+# ============================================================
+@app.route("/api/admin/products/<int:product_id>/stock", methods=["PUT"])
+@auth.require_admin
+def update_stock(product_id):
+    data = request.get_json(silent=True) or {}
+    stock_quantity = data.get("stock_quantity")
 
+    if stock_quantity is None:
+        return jsonify({"error": "stock_quantity is required"}), 400
+    try:
+        stock_quantity = int(stock_quantity)
+    except (ValueError, TypeError):
+        return jsonify({"error": "stock_quantity must be an integer"}), 400
+    if stock_quantity < 0:
+        return jsonify({"error": "stock_quantity cannot be negative"}), 400
+
+    row = query(
+        """UPDATE products SET stock_quantity = %s WHERE product_id = %s
+           RETURNING product_id, product_name, stock_quantity""",
+        (stock_quantity, product_id), fetchone=True
+    )
+    if row is None:
+        return jsonify({"error": "product not found"}), 404
+    return jsonify(row)
+
+
+@app.route("/api/admin/products/<int:product_id>/delivery-rules", methods=["PUT"])
+@auth.require_admin
+def update_delivery_rules(product_id):
+    data = request.get_json(silent=True) or {}
+    restock_cycle = data.get("restock_cycle")
+    restock_day_of_week = data.get("restock_day_of_week")
+    restock_day_of_month = data.get("restock_day_of_month")
+    min_lead_days = data.get("min_lead_days", 3)
+
+    if restock_cycle not in ("weekly", "monthly", "none"):
+        return jsonify({"error": "restock_cycle must be 'weekly', 'monthly', or 'none'"}), 400
+    if restock_cycle == "weekly" and restock_day_of_week is None:
+        return jsonify({"error": "restock_day_of_week is required for weekly cycle"}), 400
+    if restock_cycle == "monthly" and restock_day_of_month is None:
+        return jsonify({"error": "restock_day_of_month is required for monthly cycle"}), 400
+
+    product = query("SELECT product_id FROM products WHERE product_id = %s", (product_id,), fetchone=True)
+    if product is None:
+        return jsonify({"error": "product not found"}), 404
+
+    row = query(
+        """INSERT INTO product_delivery_rules
+               (product_id, restock_cycle, restock_day_of_week, restock_day_of_month, min_lead_days)
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (product_id) DO UPDATE SET
+               restock_cycle = EXCLUDED.restock_cycle,
+               restock_day_of_week = EXCLUDED.restock_day_of_week,
+               restock_day_of_month = EXCLUDED.restock_day_of_month,
+               min_lead_days = EXCLUDED.min_lead_days,
+               updated_at = CURRENT_TIMESTAMP
+           RETURNING *""",
+        (product_id, restock_cycle, restock_day_of_week, restock_day_of_month, min_lead_days),
+        fetchone=True
+    )
+    return jsonify(row)
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)

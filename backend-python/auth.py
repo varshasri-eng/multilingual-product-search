@@ -80,3 +80,21 @@ def login(email, password):
     token = create_token(row["customer_id"], row["email"])
     customer = {k: v for k, v in row.items() if k != "password_hash"}
     return {"token": token, "customer": customer}, None
+
+def require_admin(f):
+    """Decorator for admin-only routes. Builds on require_auth's token
+    check, then verifies the customer's CURRENT role from the database
+    — not a role claim baked into the token itself, since a token
+    issued before someone was promoted to admin could otherwise stay
+    valid-but-wrong for up to a week (TOKEN_EXPIRY_HOURS)."""
+    @wraps(f)
+    @require_auth
+    def wrapper(*args, **kwargs):
+        row = query(
+            "SELECT role FROM customers WHERE customer_id = %s",
+            (request.customer["customer_id"],), fetchone=True
+        )
+        if row is None or row["role"] != "admin":
+            return jsonify({"error": "admin access required"}), 403
+        return f(*args, **kwargs)
+    return wrapper
