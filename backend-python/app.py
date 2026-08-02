@@ -324,6 +324,38 @@ def update_delivery_rules(product_id):
         fetchone=True
     )
     return jsonify(row)
+
+# ============================================================
+# Admin — search log visibility. Shows what customers actually
+# searched for and whether it resolved to a product. The
+# result_found=false rows are the actionable ones: real customer
+# queries that found nothing, which is the direct signal for which
+# alias/hashtag is missing (see Proposal §4.1 / search_logs table
+# design intent from early in this project).
+# ============================================================
+@app.route("/api/admin/search-logs", methods=["GET"])
+@auth.require_admin
+def get_search_logs():
+    only_failed = request.args.get("only_failed", "false").lower() == "true"
+    limit = request.args.get("limit", 50)
+    try:
+        limit = int(limit)
+    except ValueError:
+        limit = 50
+
+    sql = """
+        SELECT sl.log_id, sl.search_query, sl.result_found, sl.searched_at,
+               sl.matched_product_id, p.product_name AS matched_product_name
+        FROM search_logs sl
+        LEFT JOIN products p ON p.product_id = sl.matched_product_id
+    """
+    if only_failed:
+        sql += " WHERE sl.result_found = FALSE"
+    sql += " ORDER BY sl.searched_at DESC LIMIT %s"
+
+    rows = query(sql, (limit,))
+    return jsonify({"results": rows})
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)

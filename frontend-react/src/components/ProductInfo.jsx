@@ -3,12 +3,14 @@ import { Box, Paper, Typography, Button, Chip, Snackbar, Alert } from "@mui/mate
 import AliasChips from "./AliasChips";
 import QuantitySelector from "./QuantitySelector";
 import { useCart } from "../context/CartContext";
+import ScheduleDeliveryModal from "./ScheduleDeliveryModal";
 
 export default function ProductInfo({ product }) {
   const { addItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
 
   const {
     product_name,
@@ -33,9 +35,15 @@ export default function ProductInfo({ product }) {
   const isOutOfStock = !stock_quantity || stock_quantity <= 0;
   const isLowStock = !isOutOfStock && stock_quantity <= 5;
 
-  const handleAddToCart = () => {
+  const handleAddToCartClick = () => {
+    setDeliveryModalOpen(true);
+  };
+
+  const handleConfirmDelivery = (deliveryDate) => {
     addItem(product, quantity);
     setConfirmOpen(true);
+    // deliveryDate is captured here but not yet stored on the cart
+    // item — that's the next step, extending CartContext itself.
   };
 
   return (
@@ -190,7 +198,7 @@ export default function ProductInfo({ product }) {
             <Button
               variant="contained"
               disabled={isOutOfStock}
-              onClick={handleAddToCart}
+              onClick={handleAddToCartClick}
               color={isOutOfStock ? "inherit" : "primary"}
               sx={{ boxShadow: "none", "&:hover": { boxShadow: "none" }, px: 3 }}
             >
@@ -216,6 +224,14 @@ export default function ProductInfo({ product }) {
           Added {quantity} × {product_name} to cart
         </Alert>
       </Snackbar>
+
+      <ScheduleDeliveryModal
+        open={deliveryModalOpen}
+        onClose={() => setDeliveryModalOpen(false)}
+        productId={product.product_id}
+        productName={product_name}
+        onConfirm={handleConfirmDelivery}
+      />
     </Paper>
   );
 }

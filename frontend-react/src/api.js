@@ -79,3 +79,10 @@ export async function getCurrentCustomer(token) {
   });
   return res.data;
 }
+// API 5 — GET /api/products/:id/availability
+// Returns in_stock status, restock_cycle, and the earliest valid
+// delivery date, computed server-side (see backend delivery.py).
+export async function getProductAvailability(productId) {
+  const res = await client.get(`/api/products/${productId}/availability`);
+  return res.data;
+}
