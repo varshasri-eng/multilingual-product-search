@@ -356,6 +356,48 @@ def get_search_logs():
     rows = query(sql, (limit,))
     return jsonify({"results": rows})
 
+# ============================================================
+# Admin — add a missing search term to a product. This is the
+# action side of the search-logs view: admin sees a failed search
+# (e.g. "ashwagandha powder"), picks the right product, and adds
+# the term here as an alias/regional/typo variant or as a hashtag —
+# same term_type categories the whole search system already uses.
+# ============================================================
+@app.route("/api/admin/search-terms", methods=["POST"])
+@auth.require_admin
+def add_search_term():
+    data = request.get_json(silent=True) or {}
+    product_id = data.get("product_id")
+    search_term = data.get("search_term", "").strip()
+    term_type = data.get("term_type")
+    language = data.get("language")
+
+    valid_types = ("official", "alias", "regional", "typo", "hashtag")
+    if not product_id or not search_term or term_type not in valid_types:
+        return jsonify({
+            "error": f"product_id, search_term, and term_type (one of {valid_types}) are required"
+        }), 400
+
+    product = query("SELECT product_id FROM products WHERE product_id = %s", (product_id,), fetchone=True)
+    if product is None:
+        return jsonify({"error": "product not found"}), 404
+
+    row = query(
+        """INSERT INTO search_terms (product_id, search_term, term_type, language)
+           VALUES (%s, %s, %s, %s)
+           ON CONFLICT (product_id, search_term) DO NOTHING
+           RETURNING search_term_id, product_id, search_term, term_type, language""",
+        (product_id, search_term, term_type, language),
+        fetchone=True
+    )
+
+    if row is None:
+        # ON CONFLICT DO NOTHING means no row is returned even when
+        # it already existed — not a failure, just already there.
+        return jsonify({"message": "term already exists for this product", "added": False}), 200
+
+    return jsonify({"added": True, "term": row}), 201
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
