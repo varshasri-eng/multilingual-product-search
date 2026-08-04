@@ -16,6 +16,9 @@ export const getRelated = (id, sessionId) =>
 export const getRecentlyViewed = (sessionId) =>
   api.get("/products/recently-viewed", { params: { session_id: sessionId } });
 
+export const getAvailability = (id) =>
+  api.get(`/products/${id}/availability`);
+
 // ── Session id for anonymous view tracking ───────────────────
 export const getSessionId = () => {
   let sid = localStorage.getItem("s2h_session");

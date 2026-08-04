@@ -15,6 +15,7 @@ search-insights view.
 """
 
 from difflib import SequenceMatcher
+from datetime import date
 
 from flask import Blueprint, request, jsonify
 from sqlalchemy import func, distinct
@@ -24,6 +25,8 @@ from app.models.product import Category, Product
 from app.models.search_term import SearchTerm
 from app.models.search_log import SearchLog
 from app.models.product_view import ProductView
+from app.models.delivery_rule import ProductDeliveryRule
+from app.utils.delivery import get_earliest_delivery_date
 
 products_bp = Blueprint("products", __name__)
 
@@ -247,3 +250,42 @@ def recently_viewed():
             results.append(product.to_dict())
 
     return jsonify({"results": results}), 200
+
+
+# ── DELIVERY AVAILABILITY ──────────────────────────────────────
+@products_bp.route("/<int:product_id>/availability", methods=["GET"])
+def product_availability(product_id):
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({"error": "product not found"}), 404
+
+    rule = ProductDeliveryRule.query.get(product_id)
+
+    in_stock = product.stock_quantity is not None and product.stock_quantity > 0
+
+    if rule is None:
+        restock_cycle = "none"
+        restock_day_of_week = None
+        restock_day_of_month = None
+        min_lead_days = 0
+    else:
+        restock_cycle = rule.restock_cycle
+        restock_day_of_week = rule.restock_day_of_week
+        restock_day_of_month = rule.restock_day_of_month
+        min_lead_days = rule.min_lead_days
+
+    earliest_date = get_earliest_delivery_date(
+        date.today(), in_stock, restock_cycle,
+        restock_day_of_week, restock_day_of_month, min_lead_days
+    )
+
+    return jsonify({
+        "product_id": product_id,
+        "in_stock": in_stock,
+        "stock_quantity": product.stock_quantity,
+        "restock_cycle": restock_cycle,
+        "restock_day_of_week": restock_day_of_week,
+        "restock_day_of_month": restock_day_of_month,
+        "min_lead_days": min_lead_days,
+        "earliest_delivery_date": earliest_date.isoformat() if earliest_date else None,
+    }), 200

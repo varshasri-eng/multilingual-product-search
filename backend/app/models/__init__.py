@@ -9,3 +9,5 @@ from app.models.search_log import SearchLog
 from app.models.product_view import ProductView
 from app.models.delivery_zone import DeliveryZone
 from app.models.order import Order, OrderItem
+
+from app.models.delivery_rule import ProductDeliveryRule

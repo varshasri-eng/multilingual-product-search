@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiArrowLeft, FiShoppingCart, FiPlus, FiMinus } from "react-icons/fi";
+import { FiArrowLeft, FiShoppingCart, FiPlus, FiMinus, FiTruck, FiCalendar, FiAlertCircle, FiCheckCircle } from "react-icons/fi";
 import {
-  getProduct, getRelated, getRecentlyViewed, getSessionId,
+  getProduct, getRelated, getRecentlyViewed, getSessionId, getAvailability,
 } from "../../api/products";
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
 
 function ProductCard({ p, onClick }) {
   return (
@@ -37,6 +42,7 @@ export default function ProductDetailsPage() {
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [availability, setAvailability] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
 
@@ -46,11 +52,13 @@ export default function ProductDetailsPage() {
       getProduct(id, sessionId),
       getRelated(id, sessionId),
       getRecentlyViewed(sessionId),
+      getAvailability(id),
     ])
-      .then(([p, r, rv]) => {
+      .then(([p, r, rv, a]) => {
         setProduct(p.data.product);
         setRelated(r.data.results || []);
         setRecent(rv.data.results || []);
+        setAvailability(a.data);
       })
       .catch(() => toast.error("Could not load product."))
       .finally(() => setLoading(false));
@@ -164,6 +172,56 @@ export default function ProductDetailsPage() {
                   {a}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Delivery schedule */}
+        {availability && (
+          <div className="mt-6 pt-5 border-t border-gray-50">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              <FiTruck size={14} className="text-brand-500" />
+              Delivery schedule
+            </div>
+            <div className={`flex items-center gap-3 p-4 rounded-xl border
+              ${availability.in_stock
+                ? "bg-green-50 border-green-200"
+                : availability.earliest_delivery_date
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-red-50 border-red-200"}`}>
+              {availability.in_stock ? (
+                <>
+                  <FiCheckCircle className="text-green-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-green-800 font-medium">In stock — ready to ship</p>
+                    <p className="text-green-700 text-sm">
+                      Earliest delivery: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
+                      (within {availability.min_lead_days} business day{availability.min_lead_days !== 1 ? "s" : ""})
+                    </p>
+                  </div>
+                </>
+              ) : availability.earliest_delivery_date ? (
+                <>
+                  <FiCalendar className="text-amber-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-amber-800 font-medium">Currently out of stock</p>
+                    <p className="text-amber-700 text-sm">
+                      Next restock: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
+                      (restock cycle: {availability.restock_cycle}{availability.restock_cycle !== "none" ? `, every ${availability.restock_day_of_week !== null ? `weekday ${availability.restock_day_of_week}` : `day ${availability.restock_day_of_month}`}` : ""})
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <FiAlertCircle className="text-red-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-red-800 font-medium">Out of stock — no delivery schedule</p>
+                    <p className="text-red-700 text-sm">
+                      No restock cycle configured. Contact us for availability.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
