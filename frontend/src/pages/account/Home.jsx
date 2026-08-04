@@ -22,6 +22,7 @@ const deliveryFeeFor = (zip) => {
 const todayISO = () => new Date().toISOString().split("T")[0];
 
 export default function Home() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
