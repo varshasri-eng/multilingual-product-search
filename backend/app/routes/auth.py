@@ -113,10 +113,8 @@ def login():
 
     if not customer or not customer.check_password(password):
         return jsonify({"error": "Invalid email/phone or password."}), 401
-    if not customer.is_active:
-        return jsonify({"error": "Account is deactivated."}), 403
 
-    # for admin accounts — block pending/rejected from getting a session
+    # for admin accounts — pending/rejected cannot get a session
     if customer.role == "admin":
         if customer.admin_role == "pending":
             return jsonify({
@@ -130,6 +128,9 @@ def login():
             return jsonify({
                 "error": "Account access is restricted."
             }), 403
+
+    if not customer.is_active:
+        return jsonify({"error": "Account is deactivated."}), 403
 
     token = create_session(customer.id)
     return jsonify({
