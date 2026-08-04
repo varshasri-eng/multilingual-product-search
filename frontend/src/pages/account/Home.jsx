@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   FiPlus, FiMinus, FiShoppingCart, FiSearch,
-  FiX, FiCheckCircle, FiTruck as FiDelivery, FiPackage, FiCalendar,
+  FiX, FiCheckCircle, FiTruck as FiDelivery, FiPackage, FiCalendar, FiClock,
 } from "react-icons/fi";
 import { getProducts, getCategories } from "../../api/products";
 import { createOrder } from "../../api/orders";
