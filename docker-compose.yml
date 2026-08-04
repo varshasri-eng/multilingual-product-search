@@ -59,7 +59,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: flask run --host=0.0.0.0 --port=5000
+    command: python wsgi.py
 
   # ─────────────────────────────────────────────
   # React — public portal at http://localhost:3000

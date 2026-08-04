@@ -58,6 +58,7 @@ class Product(db.Model):
     # store2home extras (added idempotently by bootstrap)
     emoji            = db.Column(db.String(20), default="🛒")
     diet             = db.Column(db.String(20), default="veg")  # veg | nonveg
+    stock_quantity   = db.Column(db.Integer, default=0)
 
     created_at       = db.Column(db.DateTime(timezone=True),
                                  default=lambda: datetime.now(timezone.utc))
