@@ -14,3 +14,5 @@ class Config:
     JWT_SECRET = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
     OTP_EXPIRY_MINUTES = 10
     SESSION_EXPIRY_DAYS = 30
+    RESET_TOKEN_EXPIRY_MINUTES = 60
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")

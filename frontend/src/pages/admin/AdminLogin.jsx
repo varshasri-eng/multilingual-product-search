@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login, verifyOtp } from "../../api/auth";
+import { login } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { FiShield, FiMail, FiArrowRight, FiLock } from "react-icons/fi";
@@ -9,43 +9,25 @@ export default function AdminLogin() {
   const { signIn } = useAuth();
   const navigate   = useNavigate();
 
-  const [step, setStep]             = useState("email"); // email | otp
-  const [identifier, setIdentifier] = useState("");
-  const [otp, setOtp]               = useState("");
-  const [loading, setLoading]       = useState(false);
+  const [email, setEmail]     = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  // ── Step 1: request OTP ──────────────────────────────────
-  const handleSendOtp = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!identifier.trim()) return toast.error("Enter your email.");
-    setLoading(true);
-    try {
-      await login(identifier.trim());
-      setStep("otp");
-      toast.success("OTP sent.");
-    } catch (err) {
-      toast.error(err.response?.data?.error || "No account found.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Step 2: verify OTP + role check ─────────────────────
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    if (!otp.trim()) return toast.error("Enter the OTP.");
+    if (!email.trim()) return toast.error("Enter your email.");
+    if (!password)     return toast.error("Enter your password.");
     setLoading(true);
     setAccessDenied(false);
     try {
-      const res = await verifyOtp(identifier.trim(), otp.trim());
+      const res = await login(email.trim(), password);
       const customer = res.data.customer;
 
       // strict role check — only admins get through
       if (customer.role !== "admin") {
         setAccessDenied(true);
-        setStep("email");
-        setOtp("");
+        setPassword("");
         setLoading(false);
         return;
       }
@@ -54,7 +36,7 @@ export default function AdminLogin() {
       toast.success(`Welcome, ${customer.name}.`);
       navigate("/admin/customers");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Invalid OTP.");
+      toast.error(err.response?.data?.error || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
@@ -110,13 +92,9 @@ export default function AdminLogin() {
             <span className="text-white font-bold text-lg">Store2Home Staff</span>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-1">
-            {step === "email" ? "Sign in" : "Verify identity"}
-          </h2>
+          <h2 className="text-2xl font-bold text-white mb-1">Sign in</h2>
           <p className="text-gray-400 text-sm mb-8">
-            {step === "email"
-              ? "Staff access only. Enter your registered email."
-              : `OTP sent to ${identifier}`}
+            Staff access only. Enter your registered email and password.
           </p>
 
           {/* Access denied banner */}
@@ -134,82 +112,64 @@ export default function AdminLogin() {
             </div>
           )}
 
-          {step === "email" ? (
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Email address
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-2.5 text-gray-500" />
-                  <input
-                    type="email"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg
-                               pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500
-                               focus:outline-none focus:ring-2 focus:ring-brand-500
-                               focus:border-transparent"
-                    placeholder="staff@store2home.com"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              <button type="submit"
-                className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold
-                           py-2.5 rounded-lg transition-colors flex items-center
-                           justify-center gap-2 disabled:opacity-50"
-                disabled={loading}>
-                {loading
-                  ? "Sending…"
-                  : <><span>Continue</span><FiArrowRight size={14} /></>}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerify} className="space-y-4">
-              <div className="bg-gray-800 rounded-xl px-4 py-3 text-sm text-gray-300">
-                Check your email for a 6-digit OTP.
-                <br />
-                <span className="text-xs text-gray-500">
-                  (Dev mode: check backend console or DB)
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  One-Time Password
-                </label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Email address
+              </label>
+              <div className="relative">
+                <FiMail className="absolute left-3 top-2.5 text-gray-500" />
                 <input
-                  type="text"
+                  type="email"
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg
-                             px-4 py-3 text-white text-2xl font-mono tracking-widest
-                             text-center placeholder-gray-600
+                             pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500
                              focus:outline-none focus:ring-2 focus:ring-brand-500
                              focus:border-transparent"
-                  placeholder="000000"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="staff@store2home.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   autoFocus
+                  autoComplete="username"
                 />
               </div>
+            </div>
 
-              <button type="submit"
-                className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold
-                           py-2.5 rounded-lg transition-colors disabled:opacity-50"
-                disabled={loading}>
-                {loading ? "Verifying…" : "Verify & Enter Portal"}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <FiLock className="absolute left-3 top-2.5 text-gray-500" />
+                <input
+                  type="password"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg
+                             pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500
+                             focus:outline-none focus:ring-2 focus:ring-brand-500
+                             focus:border-transparent"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/forgot-password")}
+                className="mt-2 text-xs text-gray-500 hover:text-brand-400 transition-colors">
+                Forgot password?
               </button>
+            </div>
 
-              <button type="button"
-                onClick={() => { setStep("email"); setOtp(""); }}
-                className="w-full text-sm text-gray-500 hover:text-gray-300
-                           transition-colors text-center">
-                ← Use a different email
-              </button>
-            </form>
-          )}
+            <button type="submit"
+              className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold
+                         py-2.5 rounded-lg transition-colors flex items-center
+                         justify-center gap-2 disabled:opacity-50"
+              disabled={loading}>
+              {loading
+                ? "Signing in…"
+                : <><span>Sign In</span><FiArrowRight size={14} /></>}
+            </button>
+          </form>
 
           <p className="text-center text-xs text-gray-600 mt-8">
             Customer portal?{" "}

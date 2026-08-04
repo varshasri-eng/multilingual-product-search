@@ -30,3 +30,10 @@ export const deleteCustomer = (id) =>
 
 export const getCustomerStats = () =>
   api.get("/admin/stats/customers");
+
+// ── Search insights ──────────────────────────────────────────
+export const getSearchLogs = (params = {}) =>
+  api.get("/admin/search-logs", { params });
+
+export const addSearchTerm = (data) =>
+  api.post("/admin/search-terms", data);

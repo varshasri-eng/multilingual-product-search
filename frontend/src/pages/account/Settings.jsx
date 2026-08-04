@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../api/auth";
+import { updateProfile } from "../../api/customers";
 import toast from "react-hot-toast";
 import {
   FiGlobe, FiMoon, FiSun, FiLogOut, FiTrash2,
@@ -22,6 +23,21 @@ export default function Settings() {
   const [language, setLanguage] = useState(customer?.preferred_language || "english");
   const [theme, setTheme]       = useState("light"); // light | dark
   const [showDelete, setShowDelete] = useState(false);
+  const [savingLang, setSavingLang] = useState(false);
+
+  const handleLanguageChange = async (value) => {
+    setLanguage(value);
+    setSavingLang(true);
+    try {
+      await updateProfile({ preferred_language: value });
+      toast.success("Language preference saved.");
+    } catch {
+      toast.error("Could not save language preference.");
+      setLanguage(customer?.preferred_language || "english");
+    } finally {
+      setSavingLang(false);
+    }
+  };
 
   const handleLogout = async () => {
     try { await logout(); } catch (_) {}
@@ -58,10 +74,8 @@ export default function Settings() {
             <select
               className="input w-44 text-sm"
               value={language}
-              onChange={(e) => {
-                setLanguage(e.target.value);
-                toast.success("Language preference saved.");
-              }}>
+              disabled={savingLang}
+              onChange={(e) => handleLanguageChange(e.target.value)}>
               {LANGUAGES.map((l) => (
                 <option key={l.value} value={l.value}>{l.label}</option>
               ))}

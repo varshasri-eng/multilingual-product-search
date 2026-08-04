@@ -21,11 +21,11 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.customer import Customer
 from app.utils.auth import admin_required, permission_required, login_required
-from app.utils.otp import create_otp, send_otp
 
 staff_bp = Blueprint("staff", __name__)
 
 VALID_PERMISSIONS = {"read", "write", "full"}
+MIN_PASSWORD_LENGTH = 8
 
 
 # ── STAFF SELF-REGISTRATION ──────────────────────────────────
@@ -47,6 +47,12 @@ def staff_register():
     if not phone: return jsonify({"error": "Phone is required."}), 400
     if not email: return jsonify({"error": "Email is required."}), 400
 
+    password = data.get("password") or ""
+    if not password:
+        return jsonify({"error": "Password is required."}), 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters."}), 400
+
     # duplicate checks
     if Customer.query.filter_by(phone=phone).first():
         return jsonify({"error": "Phone already registered."}), 409
@@ -64,6 +70,7 @@ def staff_register():
         is_verified=False,
         admin_request_note=note or None,
     )
+    staff.set_password(password)
     db.session.add(staff)
     db.session.commit()
 
@@ -126,13 +133,9 @@ def approve_staff(customer, staff_id):
     target.is_verified = True
     db.session.commit()
 
-    # send OTP so they can log in immediately
-    otp_target = target.email or target.phone
-    code = create_otp(otp_target)
-    send_otp(otp_target, code, channel="email")
-
     return jsonify({
-        "message": f"{target.name} approved with '{permission}' access.",
+        "message": f"{target.name} approved with '{permission}' access. "
+                   f"They can sign in with the password they chose at registration.",
         "staff": target.to_dict(),
     }), 200
 

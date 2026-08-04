@@ -21,19 +21,31 @@ def create_app():
             Customer, Address, CustomerAddress,
             Household, HouseholdMember,
             Session, OTPVerification,
+            Category, Product, DeliveryZone,
         )
-        from app.models.order import Order  # noqa: F401
+        from app.models.order import Order, OrderItem  # noqa: F401
 
     # Register blueprints
     from app.routes.auth import auth_bp
     from app.routes.customers import customers_bp
     from app.routes.admin import admin_bp
     from app.routes.staff import staff_bp
+    from app.routes.products import products_bp
+    from app.routes.orders import orders_bp
+    from app.routes.households import households_bp
 
     app.register_blueprint(auth_bp,       url_prefix="/api/auth")
     app.register_blueprint(customers_bp,  url_prefix="/api/customers")
     app.register_blueprint(admin_bp,      url_prefix="/api/admin")
     app.register_blueprint(staff_bp,      url_prefix="/api/staff")
+    app.register_blueprint(products_bp,   url_prefix="/api/products")
+    app.register_blueprint(orders_bp,     url_prefix="/api/orders")
+    app.register_blueprint(households_bp, url_prefix="/api/households")
+
+    # create missing tables + seed the catalog (idempotent)
+    with app.app_context():
+        from app.utils.bootstrap import init_db
+        init_db()
 
     # health check
     @app.route("/api/health")

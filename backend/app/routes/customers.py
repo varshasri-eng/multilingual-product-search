@@ -121,6 +121,7 @@ def add_address(customer):
         }), 422
 
     address = Address(
+        customer_id=customer.id,
         address_line1=address_line1,
         address_line2=(data.get("address_line2") or "").strip() or None,
         city=city,

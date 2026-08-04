@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { staffRegister } from "../../api/staff";
 import toast from "react-hot-toast";
-import { FiShield, FiArrowRight, FiCheckCircle } from "react-icons/fi";
+import { FiShield, FiArrowRight, FiCheckCircle, FiLock } from "react-icons/fi";
 
 export default function AdminRegister() {
   const navigate = useNavigate();
@@ -10,7 +10,7 @@ export default function AdminRegister() {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({
     name: "", phone: "", email: "",
-    whatsapp_number: "", note: "",
+    whatsapp_number: "", note: "", password: "", confirm_password: "",
   });
 
   const set = (field) => (e) =>
@@ -21,6 +21,9 @@ export default function AdminRegister() {
     if (!form.name.trim())  return toast.error("Name is required.");
     if (!form.phone.trim()) return toast.error("Phone is required.");
     if (!form.email.trim()) return toast.error("Email is required.");
+    if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
+    if (form.password !== form.confirm_password)
+      return toast.error("Passwords do not match.");
     setLoading(true);
     try {
       await staffRegister(form);
@@ -186,6 +189,51 @@ export default function AdminRegister() {
                     value={form.email}
                     onChange={set("email")}
                   />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3 top-2.5 text-gray-500" />
+                    <input
+                      type="password"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg
+                                 pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500
+                                 focus:outline-none focus:ring-2 focus:ring-brand-500
+                                 focus:border-transparent"
+                      placeholder="At least 8 characters"
+                      value={form.password}
+                      onChange={set("password")}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+
+                {/* Confirm password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3 top-2.5 text-gray-500" />
+                    <input
+                      type="password"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg
+                                 pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500
+                                 focus:outline-none focus:ring-2 focus:ring-brand-500
+                                 focus:border-transparent"
+                      placeholder="Re-enter your password"
+                      value={form.confirm_password}
+                      onChange={set("confirm_password")}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    You'll use this password to sign in once an admin approves you.
+                  </p>
                 </div>
 
                 {/* Reason */}

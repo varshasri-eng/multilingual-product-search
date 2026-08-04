@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 // Auth pages
 import Login         from "./pages/Login";
 import Register      from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import AdminLogin    from "./pages/admin/AdminLogin";
 import AdminRegister from "./pages/admin/AdminRegister";
 
@@ -15,11 +17,13 @@ import Orders        from "./pages/account/Orders";
 import FamilyGroup   from "./pages/account/FamilyGroup";
 import Notifications from "./pages/account/Notifications";
 import Settings      from "./pages/account/Settings";
+import ProductDetailsPage from "./pages/account/ProductDetailsPage";
 
 // Admin pages
 import CustomerList    from "./pages/admin/CustomerList";
 import CustomerDetail  from "./pages/admin/CustomerDetail";
 import StaffManagement from "./pages/admin/StaffManagement";
+import SearchInsights  from "./pages/admin/SearchInsights";
 
 // Layouts
 import CustomerLayout from "./components/CustomerLayout";
@@ -58,8 +62,10 @@ export default function App() {
       <Routes>
 
         {/* ── Customer public ─────────────────────────── */}
-        <Route path="/login"    element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login"           element={<Login />} />
+        <Route path="/register"        element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password"  element={<ResetPassword />} />
 
         {/* ── Customer protected ──────────────────────── */}
         <Route path="/account" element={
@@ -67,6 +73,7 @@ export default function App() {
         }>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home"          element={<Home />} />
+          <Route path="products/:id"  element={<ProductDetailsPage />} />
           <Route path="profile"       element={<Profile />} />
           <Route path="addresses"     element={<Addresses />} />
           <Route path="orders"        element={<Orders />} />
@@ -87,6 +94,7 @@ export default function App() {
           <Route path="customers"     element={<CustomerList />} />
           <Route path="customers/:id" element={<CustomerDetail />} />
           <Route path="staff"         element={<StaffManagement />} />
+          <Route path="search"        element={<SearchInsights />} />
         </Route>
 
         {/* ── Defaults ────────────────────────────────── */}

@@ -409,3 +409,74 @@ def customer_stats(customer):
         "admins": admins,
         "by_language": {lang: count for lang, count in by_language},
     }), 200
+
+
+# ── SEARCH INSIGHTS ──────────────────────────────────────────
+@admin_bp.route("/search-logs", methods=["GET"])
+@admin_required
+def search_logs(customer):
+    """
+    What customers actually searched for and whether it resolved.
+    ?only_failed=true surfaces the actionable rows (queries that found
+    nothing → those are the missing aliases/typos).
+    """
+    from app.models.search_log import SearchLog
+
+    only_failed = request.args.get("only_failed", "").lower() == "true"
+    try:
+        limit = min(int(request.args.get("limit", 50)), 200)
+    except ValueError:
+        limit = 50
+
+    q = SearchLog.query
+    if only_failed:
+        q = q.filter_by(result_found=False)
+    q = q.order_by(SearchLog.searched_at.desc()).limit(limit)
+
+    logs = q.all()
+    return jsonify({
+        "results": [log.to_dict() for log in logs],
+    }), 200
+
+
+@admin_bp.route("/search-terms", methods=["POST"])
+@admin_required
+def add_search_term(customer):
+    """
+    Add a missing search term to a product — the action side of the
+    search-logs view: admin sees a failed query, picks the product, and
+    adds it as official/alias/regional/typo/hashtag.
+    """
+    from app.models.product import Product
+    from app.models.search_term import SearchTerm
+
+    data = request.get_json(silent=True) or {}
+    product_id = data.get("product_id")
+    search_term = (data.get("search_term") or "").strip()
+    term_type = data.get("term_type")
+    language = data.get("language")
+
+    valid_types = ("official", "alias", "regional", "typo", "hashtag")
+    if not product_id or not search_term or term_type not in valid_types:
+        return jsonify({
+            "error": f"product_id, search_term, and term_type (one of {valid_types}) are required"
+        }), 400
+
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({"error": "Product not found."}), 404
+
+    existing = SearchTerm.query.filter_by(
+        product_id=product.id, search_term=search_term
+    ).first()
+    if existing:
+        return jsonify({"message": "Term already exists for this product.", "added": False}), 200
+
+    db.session.add(SearchTerm(
+        product_id=product.id,
+        search_term=search_term,
+        term_type=term_type,
+        language=language or None,
+    ))
+    db.session.commit()
+    return jsonify({"added": True, "product_id": product.id, "search_term": search_term}), 201

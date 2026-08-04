@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { logout } from "../api/auth";
 import toast from "react-hot-toast";
-import { FiUsers, FiLogOut, FiHome, FiShield } from "react-icons/fi";
+import { FiUsers, FiLogOut, FiHome, FiShield, FiSearch } from "react-icons/fi";
 
 export default function AdminLayout() {
   const { customer, signOut } = useAuth();
@@ -46,6 +46,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/staff" className={navClass}>
             <FiShield /> Staff
+          </NavLink>
+          <NavLink to="/admin/search" className={navClass}>
+            <FiSearch /> Search Insights
           </NavLink>
         </nav>
 

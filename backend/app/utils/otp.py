@@ -61,8 +61,8 @@ def send_otp(identifier: str, code: str, channel: str = "email"):
     Phase 1: Print OTP to console (mock).
     Phase 2: Integrate WhatsApp or SMS here.
     """
-    print(f"\n{'='*40}")
-    print(f"  OTP for {identifier}: {code}")
-    print(f"  Channel: {channel} (mock — Phase 1)")
-    print(f"{'='*40}\n")
+    print(f"\n{'='*40}", flush=True)
+    print(f"  OTP for {identifier}: {code}", flush=True)
+    print(f"  Channel: {channel} (mock — Phase 1)", flush=True)
+    print(f"{'='*40}\n", flush=True)
     # TODO Phase 2: send via WhatsApp Business API or Twilio
