@@ -189,13 +189,18 @@ def create_guest_order():
     from app.models.customer import Customer
     customer = Customer.query.filter_by(email=guest_email).first()
     if not customer:
+        # phone is required+unique; generate a placeholder for guests
+        guest_phone = guest_phone or f"guest-{guest_email.split('@')[0]}"
+        # ensure uniqueness
+        if Customer.query.filter_by(phone=guest_phone).first():
+            import secrets
+            guest_phone = f"guest-{secrets.token_hex(6)}"
         customer = Customer(
             name=guest_name,
             email=guest_email,
-            phone=guest_phone or None,
+            phone=guest_phone,
             role="customer",
             is_active=True,
-            is_approved=True,
         )
         db.session.add(customer)
         db.session.flush()
