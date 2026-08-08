@@ -7,11 +7,19 @@
     font-family: 'Inter', sans-serif;
     @apply bg-gray-50 text-gray-900;
   }
+
+  /* Dynamic branding colors via CSS variables */
+  :root {
+    --color-primary: #e89208;
+    --color-secondary: #1f2937;
+    --color-accent: #f59e0b;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold
+    background-color: var(--color-primary);
+    @apply hover:opacity-90 text-white font-semibold
            px-4 py-2 rounded-xl transition-colors duration-150
            disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus:ring-4 focus:ring-brand-500/25;

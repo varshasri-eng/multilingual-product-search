@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { BrandingProvider } from "./context/BrandingContext";
 
 // Public pages
 import LandingPage from "./pages/LandingPage";
@@ -30,6 +31,7 @@ import CustomerList    from "./pages/admin/CustomerList";
 import CustomerDetail  from "./pages/admin/CustomerDetail";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SearchInsights  from "./pages/admin/SearchInsights";
+import AdminBrandingPage from "./pages/admin/AdminBrandingPage";
 
 // Layouts
 import CustomerLayout from "./components/CustomerLayout";
@@ -65,6 +67,7 @@ function AdminRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <BrandingProvider>
       <Routes>
 
         {/* ── Public (no auth) ───────────────────────── */}
@@ -107,12 +110,14 @@ export default function App() {
           <Route path="customers/:id" element={<CustomerDetail />} />
           <Route path="staff"         element={<StaffManagement />} />
           <Route path="search"        element={<SearchInsights />} />
+          <Route path="branding"      element={<AdminBrandingPage />} />
         </Route>
 
         {/* ── Defaults ────────────────────────────────── */}
         <Route path="*"  element={<Navigate to="/" replace />} />
 
       </Routes>
+      </BrandingProvider>
     </AuthProvider>
   );
 }

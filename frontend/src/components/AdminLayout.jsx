@@ -1,11 +1,14 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import { logout } from "../api/auth";
 import toast from "react-hot-toast";
-import { FiUsers, FiLogOut, FiHome, FiShield, FiSearch } from "react-icons/fi";
+import { FiUsers, FiLogOut, FiHome, FiShield, FiSearch, FiDroplet } from "react-icons/fi";
+import BrandLogo from "./BrandLogo";
 
 export default function AdminLayout() {
   const { customer, signOut } = useAuth();
+  const { settings } = useBranding();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -27,11 +30,8 @@ export default function AdminLayout() {
       <aside className="w-60 bg-white border-r border-gray-100 flex flex-col p-4">
         {/* Logo */}
         <div className="flex items-center gap-2 mb-1 px-1">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600
-                          flex items-center justify-center flex-shrink-0">
-            <FiHome className="text-white" size={15} />
-          </div>
-          <span className="font-bold text-lg text-gray-900">Store2Home</span>
+          <BrandLogo size="sm" />
+          <span className="font-bold text-lg text-gray-900">{settings.site_name}</span>
         </div>
         <span className="inline-flex self-start mx-1.5 mb-6 px-2 py-0.5 rounded-full
                          bg-purple-50 text-purple-600 text-xs font-semibold">
@@ -60,6 +60,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/search" className={navClass}>
             <FiSearch /> Search Insights
+          </NavLink>
+          <NavLink to="/admin/branding" className={navClass}>
+            <FiDroplet /> Branding
           </NavLink>
         </nav>
 

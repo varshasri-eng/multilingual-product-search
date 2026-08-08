@@ -5,9 +5,12 @@ import {
   FiPlus, FiMinus, FiShoppingCart, FiSearch, FiX,
 } from "react-icons/fi";
 import { getProducts, getCategories } from "../api/products";
+import { useBranding } from "../context/BrandingContext";
+import BrandLogo from "../components/BrandLogo";
 
 export default function ShopPage() {
   const navigate = useNavigate();
+  const { settings } = useBranding();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,11 +77,8 @@ export default function ShopPage() {
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600
-                             flex items-center justify-center text-white text-lg font-bold shadow-sm">
-              S2H
-            </span>
-            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">Store2Home</span>
+            <BrandLogo size="md" />
+            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">{settings.site_name}</span>
           </Link>
           <div className="flex items-center gap-3">
             <button

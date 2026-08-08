@@ -22,6 +22,7 @@ def create_app():
             Household, HouseholdMember,
             Session, OTPVerification,
             Category, Product, DeliveryZone,
+            SiteSettings,
         )
         from app.models.order import Order, OrderItem  # noqa: F401
 
@@ -33,6 +34,7 @@ def create_app():
     from app.routes.products import products_bp
     from app.routes.orders import orders_bp
     from app.routes.households import households_bp
+    from app.routes.settings import settings_bp
 
     app.register_blueprint(auth_bp,       url_prefix="/api/auth")
     app.register_blueprint(customers_bp,  url_prefix="/api/customers")
@@ -41,6 +43,7 @@ def create_app():
     app.register_blueprint(products_bp,   url_prefix="/api/products")
     app.register_blueprint(orders_bp,     url_prefix="/api/orders")
     app.register_blueprint(households_bp, url_prefix="/api/households")
+    app.register_blueprint(settings_bp,   url_prefix="/api/settings")
 
     # create missing tables + seed the catalog (idempotent)
     with app.app_context():

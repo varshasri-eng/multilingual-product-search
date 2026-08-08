@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import { logout } from "../api/auth";
 import toast from "react-hot-toast";
 import {
@@ -8,6 +9,7 @@ import {
   FiChevronRight, FiChevronLeft,
 } from "react-icons/fi";
 import { useState } from "react";
+import BrandLogo from "./BrandLogo";
 
 const NAV_ITEMS = [
   {
@@ -35,6 +37,7 @@ const NAV_ITEMS = [
 
 export default function CustomerLayout() {
   const { customer, signOut } = useAuth();
+  const { settings } = useBranding();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -63,10 +66,8 @@ export default function CustomerLayout() {
 
         {/* Logo */}
         <div className={`flex items-center gap-2 mb-6 px-2 ${collapsed ? "justify-center px-0" : ""}`}>
-          <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center flex-shrink-0">
-            <FiHome className="text-white" size={14} />
-          </div>
-          {!collapsed && <span className="font-bold text-gray-900 whitespace-nowrap">Store2Home</span>}
+          <BrandLogo size="sm" />
+          {!collapsed && <span className="font-bold text-gray-900 whitespace-nowrap">{settings.site_name}</span>}
         </div>
 
         {/* Home (above My Account) */}

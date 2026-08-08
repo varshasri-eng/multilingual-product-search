@@ -3,6 +3,8 @@ import {
   FiShoppingCart, FiTruck, FiShield, FiClock,
   FiSearch, FiPackage, FiStar,
 } from "react-icons/fi";
+import { useBranding } from "../context/BrandingContext";
+import BrandLogo from "../components/BrandLogo";
 
 const FEATURES = [
   { icon: <FiTruck size={22} />, title: "Fast Delivery", desc: "Same-day delivery in Lathrop & Mountain House" },
@@ -22,6 +24,7 @@ const CATEGORIES = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { settings } = useBranding();
 
   return (
     <div className="min-h-screen bg-white">
@@ -29,11 +32,8 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600
-                             flex items-center justify-center text-white text-lg font-bold shadow-sm">
-              S2H
-            </span>
-            <span className="text-lg font-bold text-gray-900 tracking-tight">Store2Home</span>
+            <BrandLogo size="md" />
+            <span className="text-lg font-bold text-gray-900 tracking-tight">{settings.site_name}</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -62,22 +62,17 @@ export default function LandingPage() {
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900
                            leading-[1.1] tracking-tight">
-              Fresh groceries,
-              <br />
-              <span className="bg-gradient-to-r from-brand-500 to-orange-500 bg-clip-text text-transparent">
-                delivered to your door
-              </span>
+              {settings.hero_title}
             </h1>
             <p className="mt-5 text-lg text-gray-500 leading-relaxed max-w-lg">
-              Shop your favourite Indian groceries in your own language.
-              Telugu, Hindi, Tamil — just search and we'll handle the rest.
+              {settings.hero_subtitle}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <button
                 onClick={() => navigate("/shop")}
                 className="btn-primary text-base !px-7 !py-3 rounded-full flex items-center gap-2 shadow-lg shadow-brand-500/20">
                 <FiShoppingCart size={18} />
-                Start shopping
+                {settings.hero_cta || "Start shopping"}
               </button>
               <button
                 onClick={() => navigate("/login")}
@@ -180,12 +175,11 @@ export default function LandingPage() {
       <footer className="border-t border-gray-100 py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center
-                             text-white text-xs font-bold">S2H</span>
-            <span className="text-sm font-semibold text-gray-700">Store2Home</span>
+            <BrandLogo size="sm" />
+            <span className="text-sm font-semibold text-gray-700">{settings.site_name}</span>
           </div>
           <p className="text-xs text-gray-400">
-            © {new Date().getFullYear()} Store2Home. Fresh groceries, delivered.
+            {settings.footer_text}
           </p>
         </div>
       </footer>

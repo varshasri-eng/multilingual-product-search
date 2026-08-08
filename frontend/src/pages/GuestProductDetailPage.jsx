@@ -8,6 +8,8 @@ import {
 import {
   getProduct, getRelated, getRecentlyViewed, getSessionId, getAvailability,
 } from "../api/products";
+import { useBranding } from "../context/BrandingContext";
+import BrandLogo from "../components/BrandLogo";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -43,6 +45,7 @@ export default function GuestProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const sessionId = getSessionId();
+  const { settings } = useBranding();
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -127,11 +130,8 @@ export default function GuestProductDetailPage() {
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-4xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
           <Link to="/shop" className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600
-                             flex items-center justify-center text-white text-lg font-bold shadow-sm">
-              S2H
-            </span>
-            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">Store2Home</span>
+            <BrandLogo size="md" />
+            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">{settings.site_name}</span>
           </Link>
           <div className="flex items-center gap-3">
             {cartCount > 0 && (
