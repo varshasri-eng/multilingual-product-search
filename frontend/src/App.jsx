@@ -1,6 +1,12 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
+// Public pages
+import LandingPage from "./pages/LandingPage";
+import ShopPage from "./pages/ShopPage";
+import GuestProductDetailPage from "./pages/GuestProductDetailPage";
+import GuestCheckoutPage from "./pages/GuestCheckoutPage";
+
 // Auth pages
 import Login         from "./pages/Login";
 import Register      from "./pages/Register";
@@ -61,7 +67,13 @@ export default function App() {
     <AuthProvider>
       <Routes>
 
-        {/* ── Customer public ─────────────────────────── */}
+        {/* ── Public (no auth) ───────────────────────── */}
+        <Route path="/"                element={<LandingPage />} />
+        <Route path="/shop"            element={<ShopPage />} />
+        <Route path="/shop/:id"        element={<GuestProductDetailPage />} />
+        <Route path="/checkout"        element={<GuestCheckoutPage />} />
+
+        {/* ── Customer auth ──────────────────────────── */}
         <Route path="/login"           element={<Login />} />
         <Route path="/register"        element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -98,8 +110,7 @@ export default function App() {
         </Route>
 
         {/* ── Defaults ────────────────────────────────── */}
-        <Route path="/"  element={<Navigate to="/login" replace />} />
-        <Route path="*"  element={<Navigate to="/login" replace />} />
+        <Route path="*"  element={<Navigate to="/" replace />} />
 
       </Routes>
     </AuthProvider>

@@ -9,3 +9,6 @@ export const getOrder = (id) =>
 
 export const createOrder = (data) =>
   api.post("/orders", data);
+
+export const createGuestOrder = (data) =>
+  api.post("/orders/guest", data);
