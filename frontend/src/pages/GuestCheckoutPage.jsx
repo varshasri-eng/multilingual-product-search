@@ -6,8 +6,8 @@ import {
   FiTruck as FiDelivery, FiPackage, FiCalendar, FiClock, FiUser, FiMail, FiPhone,
   FiMapPin,
 } from "react-icons/fi";
-import { getProducts } from "../../api/products";
-import { createGuestOrder } from "../../api/orders";
+import { getProducts } from "../api/products";
+import { createGuestOrder } from "../api/orders";
 
 const TIME_SLOTS = ["Morning 9-12", "Afternoon 12-4", "Evening 4-7"];
 const todayISO = () => new Date().toISOString().split("T")[0];

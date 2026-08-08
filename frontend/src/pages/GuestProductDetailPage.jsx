@@ -7,7 +7,7 @@ import {
 } from "react-icons/fi";
 import {
   getProduct, getRelated, getRecentlyViewed, getSessionId, getAvailability,
-} from "../../api/products";
+} from "../api/products";
 
 function formatDate(iso) {
   if (!iso) return "—";

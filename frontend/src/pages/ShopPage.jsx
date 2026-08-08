@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import {
   FiPlus, FiMinus, FiShoppingCart, FiSearch, FiX,
 } from "react-icons/fi";
-import { getProducts, getCategories } from "../../api/products";
+import { getProducts, getCategories } from "../api/products";
 
 export default function ShopPage() {
   const navigate = useNavigate();
