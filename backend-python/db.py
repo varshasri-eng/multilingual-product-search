@@ -14,16 +14,13 @@ connection_pool = pool.SimpleConnectionPool(
     password=os.getenv("DB_PASSWORD", ""),
 )
 
-
 def get_conn():
     conn = connection_pool.getconn()
     conn.autocommit = True  # so functions like log_product_view() persist
     return conn
 
-
 def put_conn(conn):
     connection_pool.putconn(conn)
-
 
 def query(sql, params=None, fetchone=False):
     conn = get_conn()

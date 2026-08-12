@@ -137,7 +137,7 @@ def login():
 @auth.require_auth
 def me():
     row = query(
-        "SELECT customer_id, name, email, phone FROM customers WHERE customer_id = %s",
+        "SELECT customer_id, name, email, phone, role FROM customers WHERE customer_id = %s",
         (request.customer["customer_id"],),
         fetchone=True,
     )
@@ -397,6 +397,489 @@ def add_search_term():
         return jsonify({"message": "term already exists for this product", "added": False}), 200
 
     return jsonify({"added": True, "term": row}), 201
+
+# ============================================================
+# API 6 — POST /api/orders
+# "Customer places order" — step 1 of the mentor's order flow.
+# Turns a cart (list of items) into a real orders + order_items
+# record. Each item keeps its OWN delivery_date, matching the
+# earlier "per item, not per order" scheduling requirement.
+#
+# Note: validates every item BEFORE inserting anything, since
+# db.py's query() auto-commits each call individually rather than
+# wrapping the whole request in one transaction — this reduces (but
+# doesn't fully eliminate) the risk of a partially-created order if
+# something fails mid-insert. A fully atomic version would need a
+# dedicated transaction-aware connection helper in db.py — worth
+# doing later if this becomes a real reliability concern.
+#
+# Does NOT touch stock_quantity — whether/when to decrement stock
+# (at order time vs. later processing) wasn't specified and is a
+# real decision worth confirming, not guessing.
+# ============================================================
+@app.route("/api/orders", methods=["POST"])
+@auth.require_auth
+def place_order():
+    data = request.get_json(silent=True) or {}
+    items = data.get("items")
+
+    if not items or not isinstance(items, list):
+        return jsonify({"error": "items must be a non-empty list"}), 400
+
+    # ---- Validate every item first, before inserting anything ----
+    validated_items = []
+    for i, item in enumerate(items):
+        product_id = item.get("product_id")
+        quantity = item.get("quantity")
+        delivery_date = item.get("delivery_date")
+
+        if not product_id or not quantity or not delivery_date:
+            return jsonify({
+                "error": f"item {i}: product_id, quantity, and delivery_date are required"
+            }), 400
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return jsonify({"error": f"item {i}: quantity must be a positive integer"}), 400
+
+        product = query(
+            "SELECT product_id, product_name, price FROM products WHERE product_id = %s",
+            (product_id,), fetchone=True
+        )
+        if product is None:
+            return jsonify({"error": f"item {i}: product {product_id} not found"}), 404
+
+        validated_items.append({
+            "product_id": product_id,
+            "quantity": quantity,
+            "delivery_date": delivery_date,
+            "price_at_order": product["price"],
+        })
+
+    total_amount = sum(float(it["price_at_order"]) * it["quantity"] for it in validated_items)
+    customer_id = request.customer["customer_id"]
+
+    # ---- All validated — now actually create the order ----
+    order = query(
+        """INSERT INTO orders (customer_id, status, total_amount)
+           VALUES (%s, 'pending', %s)
+           RETURNING order_id, customer_id, status, total_amount, created_at""",
+        (customer_id, total_amount), fetchone=True
+    )
+
+    created_items = []
+    for it in validated_items:
+        row = query(
+            """INSERT INTO order_items (order_id, product_id, quantity, price_at_order, delivery_date)
+               VALUES (%s, %s, %s, %s, %s)
+               RETURNING order_item_id, product_id, quantity, price_at_order, delivery_date""",
+            (order["order_id"], it["product_id"], it["quantity"], it["price_at_order"], it["delivery_date"]),
+            fetchone=True
+        )
+        created_items.append(row)
+
+    order["items"] = created_items
+    return jsonify(order), 201
+
+# ============================================================
+# API 7 — GET /api/orders/<id>
+# Customer-facing order lookup — the "get Invoice / Order
+# Confirmation" step right after placing an order. A customer can
+# only view their OWN order; an admin can view any order (reuses
+# the same endpoint rather than duplicating the shape admin already
+# gets from GET /api/admin/orders).
+#
+# Includes the invoice as a nested object, null until admin raises
+# one via POST /api/admin/orders/<id>/invoice — the confirmation
+# page uses that null-ness to show "invoice not yet issued" vs the
+# actual amount/dates once it exists.
+# ============================================================
+@app.route("/api/orders/<int:order_id>", methods=["GET"])
+@auth.require_auth
+def get_order(order_id):
+    order = query(
+        "SELECT order_id, customer_id, status, total_amount, created_at FROM orders WHERE order_id = %s",
+        (order_id,), fetchone=True
+    )
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+
+    if order["customer_id"] != request.customer["customer_id"]:
+        role_row = query(
+            "SELECT role FROM customers WHERE customer_id = %s",
+            (request.customer["customer_id"],), fetchone=True
+        )
+        if not role_row or role_row["role"] != "admin":
+            return jsonify({"error": "not authorized to view this order"}), 403
+
+    items = query(
+        """SELECT oi.order_item_id, oi.product_id, p.product_name,
+                  oi.quantity, oi.price_at_order, oi.delivery_date
+           FROM order_items oi
+           JOIN products p ON p.product_id = oi.product_id
+           WHERE oi.order_id = %s""",
+        (order_id,)
+    )
+    order["items"] = items
+
+    invoice = query(
+        """SELECT invoice_id, amount, issued_at, paid_at, payment_note,
+                  processed_at
+           FROM invoices WHERE order_id = %s""",
+        (order_id,), fetchone=True
+    )
+    order["invoice"] = invoice
+
+    return jsonify(order)
+
+
+# ============================================================
+# Admin — list orders, for the "admin reviews" step of the order
+# flow. Filterable by status (e.g. ?status=pending to see only
+# orders awaiting review/invoicing).
+# ============================================================
+@app.route("/api/admin/orders", methods=["GET"])
+@auth.require_admin
+def get_orders():
+    status_filter = request.args.get("status")
+    limit = request.args.get("limit", 50)
+    try:
+        limit = int(limit)
+    except ValueError:
+        limit = 50
+
+    sql = """
+        SELECT o.order_id, o.customer_id, c.name AS customer_name, c.email AS customer_email,
+               o.status, o.total_amount, o.created_at
+        FROM orders o
+        JOIN customers c ON c.customer_id = o.customer_id
+    """
+    params = []
+    if status_filter:
+        sql += " WHERE o.status = %s"
+        params.append(status_filter)
+    sql += " ORDER BY o.created_at DESC LIMIT %s"
+    params.append(limit)
+
+    orders = query(sql, tuple(params))
+
+    # Attach line items for each order — small dataset (admin view,
+    # not customer-facing at scale), N+1 queries here is an
+    # acceptable trade-off for simplicity over a more complex single
+    # join-and-group query.
+    for order in orders:
+        items = query(
+            """SELECT oi.order_item_id, oi.product_id, p.product_name,
+                      oi.quantity, oi.price_at_order, oi.delivery_date
+               FROM order_items oi
+               JOIN products p ON p.product_id = oi.product_id
+               WHERE oi.order_id = %s""",
+            (order["order_id"],)
+        )
+        order["items"] = items
+
+    return jsonify({"results": orders})
+
+# ============================================================
+# Admin — raise an invoice for an order. Step 3 of the mentor's
+# flow ("admin raises invoice"). Only works on 'pending' orders —
+# can't invoice something already invoiced/paid/cancelled, since
+# that would silently overwrite an existing invoice via the UNIQUE
+# constraint on invoices.order_id.
+#
+# amount defaults to the order's own total_amount, but admin can
+# override it (e.g. adding a delivery fee, correcting a price) —
+# matches the schema note that invoice amount may differ from the
+# order's original total.
+# ============================================================
+@app.route("/api/admin/orders/<int:order_id>/invoice", methods=["POST"])
+@auth.require_admin
+def raise_invoice(order_id):
+    data = request.get_json(silent=True) or {}
+    amount = data.get("amount")
+
+    order = query(
+        "SELECT order_id, status, total_amount FROM orders WHERE order_id = %s",
+        (order_id,), fetchone=True
+    )
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] != "pending":
+        return jsonify({
+            "error": f"order must be 'pending' to invoice — current status is '{order['status']}'"
+        }), 409
+
+    if amount is None:
+        amount = order["total_amount"]
+    else:
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return jsonify({"error": "amount must be a positive number"}), 400
+
+    admin_id = request.customer["customer_id"]
+
+    invoice = query(
+        """INSERT INTO invoices (order_id, amount, issued_by)
+           VALUES (%s, %s, %s)
+           RETURNING invoice_id, order_id, amount, issued_by, issued_at""",
+        (order_id, amount, admin_id), fetchone=True
+    )
+
+    query("UPDATE orders SET status = 'invoiced' WHERE order_id = %s RETURNING order_id", (order_id,), fetchone=True)
+
+    return jsonify(invoice), 201
+
+# ============================================================
+# Admin — advance an order through the rest of its lifecycle.
+# Three separate actions, each with its own status guard so the
+# state machine can't be skipped or run backwards:
+#   invoiced -> paid -> processed
+#   pending/invoiced -> cancelled (not allowed once paid — money's
+#   already changed hands by then, cancelling needs a real refund
+#   conversation, not just a status flip)
+# ============================================================
+
+@app.route("/api/admin/orders/<int:order_id>/pay", methods=["POST"])
+@auth.require_admin
+def mark_order_paid(order_id):
+    data = request.get_json(silent=True) or {}
+    payment_note = data.get("payment_note")
+
+    order = query("SELECT order_id, status FROM orders WHERE order_id = %s", (order_id,), fetchone=True)
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] != "invoiced":
+        return jsonify({
+            "error": f"order must be 'invoiced' to mark paid — current status is '{order['status']}'"
+        }), 409
+
+    query(
+        "UPDATE invoices SET paid_at = CURRENT_TIMESTAMP, payment_note = %s WHERE order_id = %s RETURNING invoice_id",
+        (payment_note, order_id), fetchone=True
+    )
+    updated = query(
+        "UPDATE orders SET status = 'paid' WHERE order_id = %s RETURNING order_id, status",
+        (order_id,), fetchone=True
+    )
+    return jsonify(updated)
+
+
+@app.route("/api/admin/orders/<int:order_id>/process", methods=["POST"])
+@auth.require_admin
+def mark_order_processed(order_id):
+    order = query("SELECT order_id, status FROM orders WHERE order_id = %s", (order_id,), fetchone=True)
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] != "paid":
+        return jsonify({
+            "error": f"order must be 'paid' to process — current status is '{order['status']}'"
+        }), 409
+
+    admin_id = request.customer["customer_id"]
+    query(
+        "UPDATE invoices SET processed_at = CURRENT_TIMESTAMP, processed_by = %s WHERE order_id = %s RETURNING invoice_id",
+        (admin_id, order_id), fetchone=True
+    )
+    updated = query(
+        "UPDATE orders SET status = 'processed' WHERE order_id = %s RETURNING order_id, status",
+        (order_id,), fetchone=True
+    )
+    return jsonify(updated)
+
+
+@app.route("/api/admin/orders/<int:order_id>/cancel", methods=["POST"])
+@auth.require_admin
+def cancel_order(order_id):
+    order = query("SELECT order_id, status FROM orders WHERE order_id = %s", (order_id,), fetchone=True)
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] not in ("pending", "invoiced"):
+        return jsonify({
+            "error": f"can't cancel an order that's already '{order['status']}' — "
+                     f"payment has occurred, this needs a refund process, not a status flip"
+        }), 409
+
+    updated = query(
+        "UPDATE orders SET status = 'cancelled' WHERE order_id = %s RETURNING order_id, status",
+        (order_id,), fetchone=True
+    )
+    return jsonify(updated)
+
+# ============================================================
+# Admin — remove an item from an order, e.g. when a product turns
+# out to be unavailable during review. Only allowed while the order
+# is still 'pending' — once invoiced, the amount is what the
+# customer sees and is expected to pay, so it shouldn't silently
+# change under them. A correction after invoicing needs a proper
+# re-invoice flow, not a quiet edit.
+# ============================================================
+@app.route("/api/admin/orders/<int:order_id>/items/<int:order_item_id>", methods=["DELETE"])
+@auth.require_admin
+def remove_order_item(order_id, order_item_id):
+    order = query("SELECT order_id, status FROM orders WHERE order_id = %s", (order_id,), fetchone=True)
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] != "pending":
+        return jsonify({
+            "error": f"can only modify items while order is 'pending' — current status is '{order['status']}'"
+        }), 409
+
+    item = query(
+        "SELECT order_item_id FROM order_items WHERE order_item_id = %s AND order_id = %s",
+        (order_item_id, order_id), fetchone=True
+    )
+    if item is None:
+        return jsonify({"error": "item not found on this order"}), 404
+
+    remaining = query(
+        "SELECT COUNT(*) AS count FROM order_items WHERE order_id = %s",
+        (order_id,), fetchone=True
+    )
+    if remaining["count"] <= 1:
+        return jsonify({
+            "error": "can't remove the last item on an order — cancel the whole order instead"
+        }), 409
+
+    query("DELETE FROM order_items WHERE order_item_id = %s RETURNING order_item_id", (order_item_id,), fetchone=True)
+
+    # Recalculate the order total from whatever items are left.
+    new_total = query(
+        """SELECT COALESCE(SUM(price_at_order * quantity), 0) AS total
+           FROM order_items WHERE order_id = %s""",
+        (order_id,), fetchone=True
+    )
+    updated_order = query(
+        "UPDATE orders SET total_amount = %s WHERE order_id = %s RETURNING order_id, status, total_amount",
+        (new_total["total"], order_id), fetchone=True
+    )
+
+    remaining_items = query(
+        """SELECT oi.order_item_id, oi.product_id, p.product_name,
+                  oi.quantity, oi.price_at_order, oi.delivery_date
+           FROM order_items oi
+           JOIN products p ON p.product_id = oi.product_id
+           WHERE oi.order_id = %s""",
+        (order_id,)
+    )
+    updated_order["items"] = remaining_items
+
+    return jsonify(updated_order)
+
+
+# ============================================================
+# Admin — replace an item on an order in place, without touching
+# the rest of the order. Covers two real ops scenarios:
+#   1. Swap to a different product (e.g. same herb, different
+#      brand) after contacting the customer — admin manually picks
+#      the new product_id here; the customer conversation already
+#      happened outside the system, so no extra protocol is needed
+#      on this endpoint.
+#   2. Correct the quantity actually being fulfilled (e.g. customer
+#      ordered 2L but only 1L is available) — only quantity changes,
+#      price_at_order (the per-unit price) is left as-is.
+#
+# Any subset of product_id / quantity / delivery_date can be sent;
+# only what's provided gets updated. If product_id changes, the new
+# product's CURRENT price replaces price_at_order — a brand swap
+# shouldn't keep billing the old product's price. If only quantity
+# changes, price_at_order stays untouched since it's a per-unit
+# price, not a line total.
+#
+# Same 'pending' guard as remove_order_item, for the same reason:
+# once invoiced, the amount is what the customer sees and is
+# expected to pay — a correction after that needs a re-invoice, not
+# a quiet edit.
+# ============================================================
+@app.route("/api/admin/orders/<int:order_id>/items/<int:order_item_id>", methods=["PUT"])
+@auth.require_admin
+def replace_order_item(order_id, order_item_id):
+    data = request.get_json(silent=True) or {}
+    new_product_id = data.get("product_id")
+    new_quantity = data.get("quantity")
+    new_delivery_date = data.get("delivery_date")
+
+    if new_product_id is None and new_quantity is None and new_delivery_date is None:
+        return jsonify({
+            "error": "provide at least one of product_id, quantity, delivery_date to update"
+        }), 400
+
+    order = query("SELECT order_id, status FROM orders WHERE order_id = %s", (order_id,), fetchone=True)
+    if order is None:
+        return jsonify({"error": "order not found"}), 404
+    if order["status"] != "pending":
+        return jsonify({
+            "error": f"can only modify items while order is 'pending' — current status is '{order['status']}'"
+        }), 409
+
+    item = query(
+        """SELECT order_item_id, product_id, quantity, price_at_order, delivery_date
+           FROM order_items WHERE order_item_id = %s AND order_id = %s""",
+        (order_item_id, order_id), fetchone=True
+    )
+    if item is None:
+        return jsonify({"error": "item not found on this order"}), 404
+
+    product_id = item["product_id"]
+    price_at_order = item["price_at_order"]
+
+    if new_product_id is not None:
+        product = query(
+            "SELECT product_id, price FROM products WHERE product_id = %s",
+            (new_product_id,), fetchone=True
+        )
+        if product is None:
+            return jsonify({"error": f"product {new_product_id} not found"}), 404
+        product_id = product["product_id"]
+        price_at_order = product["price"]
+
+    if new_quantity is not None:
+        try:
+            new_quantity = int(new_quantity)
+            if new_quantity <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return jsonify({"error": "quantity must be a positive integer"}), 400
+    else:
+        new_quantity = item["quantity"]
+
+    delivery_date = new_delivery_date if new_delivery_date is not None else item["delivery_date"]
+
+    query(
+        """UPDATE order_items
+           SET product_id = %s, quantity = %s, price_at_order = %s, delivery_date = %s
+           WHERE order_item_id = %s
+           RETURNING order_item_id""",
+        (product_id, new_quantity, price_at_order, delivery_date, order_item_id),
+        fetchone=True
+    )
+
+    # Recalculate the order total from all items after the swap.
+    new_total = query(
+        """SELECT COALESCE(SUM(price_at_order * quantity), 0) AS total
+           FROM order_items WHERE order_id = %s""",
+        (order_id,), fetchone=True
+    )
+    updated_order = query(
+        "UPDATE orders SET total_amount = %s WHERE order_id = %s RETURNING order_id, status, total_amount",
+        (new_total["total"], order_id), fetchone=True
+    )
+
+    remaining_items = query(
+        """SELECT oi.order_item_id, oi.product_id, p.product_name,
+                  oi.quantity, oi.price_at_order, oi.delivery_date
+           FROM order_items oi
+           JOIN products p ON p.product_id = oi.product_id
+           WHERE oi.order_id = %s""",
+        (order_id,)
+    )
+    updated_order["items"] = remaining_items
+
+    return jsonify(updated_order)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
