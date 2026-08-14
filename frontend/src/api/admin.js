@@ -31,6 +31,16 @@ export const deleteCustomer = (id) =>
 export const getCustomerStats = () =>
   api.get("/admin/stats/customers");
 
+// ── Order management ──────────────────────────────────────────
+export const getAdminOrders = (params = {}) =>
+  api.get("/admin/orders", { params });
+
+export const removeOrderItem = (orderId, itemId) =>
+  api.delete(`/admin/orders/${orderId}/items/${itemId}`);
+
+export const replaceOrderItem = (orderId, itemId, data) =>
+  api.put(`/admin/orders/${orderId}/items/${itemId}/replace`, data);
+
 // ── Search insights ──────────────────────────────────────────
 export const getSearchLogs = (params = {}) =>
   api.get("/admin/search-logs", { params });

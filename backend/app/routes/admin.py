@@ -18,6 +18,8 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.customer import Customer
 from app.models.address import Address, CustomerAddress
+from app.models.order import Order, OrderItem
+from app.models.product import Product
 from app.utils.auth import admin_required
 
 admin_bp = Blueprint("admin", __name__)
@@ -27,6 +29,249 @@ VALID_LANGUAGES  = {"english", "telugu", "hindi", "tamil"}
 VALID_DIET       = {"veg", "nonveg", "both"}
 VALID_ORDER_TYPE = {"delivery", "pickup"}
 
+# ── ORDER MANAGEMENT ──────────────────────────────────────────
+@admin_bp.route("/orders", methods=["GET"])
+@admin_required
+def list_orders(customer):
+    """
+    List customer orders for the admin order-management panel.
+
+    Optional:
+        ?status=pending
+    """
+    status = (request.args.get("status") or "").strip().lower()
+
+    query = Order.query
+
+    if status:
+        query = query.filter(Order.status == status)
+
+    orders = query.order_by(Order.created_at.desc()).all()
+
+    results = []
+
+    for order in orders:
+        customer_obj = Customer.query.get(order.customer_id)
+
+        items = []
+
+        for item in order.items:
+            product = Product.query.get(item.product_id) if item.product_id else None
+
+            items.append({
+                "id": item.id,
+                "order_id": item.order_id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "unit": item.unit,
+                "quantity": item.quantity,
+                "unit_price": float(item.unit_price),
+                "line_total": float(item.line_total),
+                "stock_quantity": (
+                    product.stock_quantity if product else None
+                ),
+            })
+
+        results.append({
+            "id": order.id,
+            "order_number": order.order_number,
+            "customer_id": order.customer_id,
+            "customer_name": customer_obj.name if customer_obj else None,
+            "status": order.status,
+            "subtotal": float(order.subtotal or 0),
+            "delivery_fee": float(order.delivery_fee or 0),
+            "discount_amount": float(order.discount_amount or 0),
+            "total_amount": float(order.total_amount or 0),
+            "order_type": order.order_type,
+            "requested_date": (
+                order.requested_date.isoformat()
+                if order.requested_date
+                else None
+            ),
+            "requested_time_slot": order.requested_time_slot,
+            "created_at": (
+                order.created_at.isoformat()
+                if order.created_at
+                else None
+            ),
+            "items": items,
+        })
+
+    return jsonify({"results": results}), 200
+
+# ── REMOVE ORDER ITEM ─────────────────────────────────────────
+@admin_bp.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
+@admin_required
+def remove_order_item(customer, order_id, item_id):
+    """
+    Remove one item from an order.
+
+    The admin decides whether the item should be removed.
+    After removal, order subtotal and total are recalculated.
+    """
+
+    order = Order.query.get(order_id)
+
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    item = OrderItem.query.filter_by(
+        id=item_id,
+        order_id=order_id
+    ).first()
+
+    if not item:
+        return jsonify({"error": "Order item not found."}), 404
+
+    # Remove the item
+    db.session.delete(item)
+    db.session.flush()
+
+    # Recalculate subtotal from remaining items
+    subtotal = sum(
+        float(order_item.line_total or 0)
+        for order_item in order.items
+    )
+
+    order.subtotal = round(subtotal, 2)
+
+    # Keep the existing delivery fee and discount
+    order.total_amount = round(
+        order.subtotal
+        + float(order.delivery_fee or 0)
+        - float(order.discount_amount or 0),
+        2
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Order item removed successfully.",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "subtotal": float(order.subtotal),
+        "delivery_fee": float(order.delivery_fee or 0),
+        "discount_amount": float(order.discount_amount or 0),
+        "total_amount": float(order.total_amount),
+        "items_remaining": len(order.items),
+    }), 200
+
+
+# ── REPLACE ORDER ITEM ────────────────────────────────────────
+@admin_bp.route(
+    "/orders/<int:order_id>/items/<int:item_id>/replace",
+    methods=["PUT"]
+)
+@admin_required
+def replace_order_item(customer, order_id, item_id):
+    """
+    Replace an existing order item with another product.
+
+    The admin chooses the replacement product and quantity.
+    No automatic weight/unit conversion is performed.
+    """
+
+    order = Order.query.get(order_id)
+
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    item = OrderItem.query.filter_by(
+        id=item_id,
+        order_id=order_id
+    ).first()
+
+    if not item:
+        return jsonify({"error": "Order item not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    replacement_product_id = data.get("replacement_product_id")
+    quantity = data.get("quantity")
+
+    if not replacement_product_id:
+        return jsonify({
+            "error": "replacement_product_id is required."
+        }), 400
+
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "quantity must be a positive integer."
+        }), 400
+
+    if quantity <= 0:
+        return jsonify({
+            "error": "quantity must be a positive integer."
+        }), 400
+
+    replacement = Product.query.filter_by(
+        id=replacement_product_id,
+        is_active=True
+    ).first()
+
+    if not replacement:
+        return jsonify({
+            "error": "Replacement product not found."
+        }), 404
+
+    # Use the replacement product's current price
+    unit_price = float(
+        replacement.discounted_price
+        if replacement.discounted_price is not None
+        else replacement.price
+    )
+
+    line_total = round(unit_price * quantity, 2)
+
+    # Update the existing order item
+    item.product_id = replacement.id
+    item.product_name = replacement.name
+    item.unit = replacement.unit
+    item.quantity = quantity
+    item.unit_price = unit_price
+    item.line_total = line_total
+
+    db.session.flush()
+
+    # Recalculate subtotal from all order items
+    subtotal = sum(
+        float(order_item.line_total or 0)
+        for order_item in order.items
+    )
+
+    order.subtotal = round(subtotal, 2)
+
+    # Keep existing delivery fee and discount
+    order.total_amount = round(
+        order.subtotal
+        + float(order.delivery_fee or 0)
+        - float(order.discount_amount or 0),
+        2
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Order item replaced successfully.",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "item": {
+            "id": item.id,
+            "product_id": item.product_id,
+            "product_name": item.product_name,
+            "unit": item.unit,
+            "quantity": item.quantity,
+            "unit_price": float(item.unit_price),
+            "line_total": float(item.line_total),
+            "stock_quantity": replacement.stock_quantity,
+        },
+        "subtotal": float(order.subtotal),
+        "delivery_fee": float(order.delivery_fee or 0),
+        "discount_amount": float(order.discount_amount or 0),
+        "total_amount": float(order.total_amount),
+    }), 200
 
 # ── LIST CUSTOMERS ───────────────────────────────────────────
 @admin_bp.route("/customers", methods=["GET"])
