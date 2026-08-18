@@ -14,6 +14,7 @@ import {
   getAdminOrders,
   removeOrderItem,
   replaceOrderItem,
+  updateOrderInvoice,
 } from "../../api/admin";
 import api from "../../api/client";
 
@@ -30,6 +31,9 @@ export default function AdminOrders() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [replacementQuantity, setReplacementQuantity] = useState(1);
   const [replacing, setReplacing] = useState(false);
+  const [raisingInvoice, setRaisingInvoice] = useState({});
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [savingInvoice, setSavingInvoice] = useState(false);
 
   const loadOrders = async () => {
     try {
@@ -73,6 +77,118 @@ export default function AdminOrders() {
       );
     }
   };
+// ── RAISE INVOICE ─────────────────────────────────────────
+  const handleRaiseInvoice = async (order) => {
+    const confirmed = window.confirm(
+      `Raise invoice for order ${order.order_number}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setRaisingInvoice((prev) => ({
+        ...prev,
+        [order.id]: true,
+      }));
+
+      const res = await api.post(
+        `/admin/orders/${order.id}/invoice`
+      );
+
+      toast.success(
+        res.data?.message || "Invoice raised successfully."
+      );
+
+      await loadOrders();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || "Could not raise invoice."
+      );
+    } finally {
+      setRaisingInvoice((prev) => ({
+        ...prev,
+        [order.id]: false,
+      }));
+    }
+  };
+  const openInvoiceEditor = (order) => {
+  if (!order.invoice) {
+    toast.error("Raise the invoice first.");
+    return;
+  }
+
+  setEditingInvoice({
+    orderId: order.id,
+    invoice: {
+      ...order.invoice,
+      items: (order.invoice.items || []).map((item) => ({
+        ...item,
+      })),
+    },
+  });
+};
+
+const closeInvoiceEditor = () => {
+  if (savingInvoice) return;
+  setEditingInvoice(null);
+};
+
+const updateInvoiceItem = (itemId, field, value) => {
+  setEditingInvoice((prev) => {
+    if (!prev) return prev;
+
+    return {
+      ...prev,
+      invoice: {
+        ...prev.invoice,
+        items: prev.invoice.items.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                [field]:
+                  field === "tax_percentage"
+                    ? value
+                    : value,
+              }
+            : item
+        ),
+      },
+    };
+  });
+};
+
+const handleSaveInvoice = async () => {
+  if (!editingInvoice) return;
+
+  try {
+    setSavingInvoice(true);
+
+    const res = await updateOrderInvoice(
+      editingInvoice.orderId,
+      {
+        items: editingInvoice.invoice.items.map((item) => ({
+          id: item.id,
+          taxable: item.taxable,
+          tax_percentage: Number(item.tax_percentage) || 0,
+        })),
+      }
+    );
+
+    toast.success(
+      res.data?.message || "Invoice updated successfully."
+    );
+
+    setEditingInvoice(null);
+    await loadOrders();
+  } catch (err) {
+    toast.error(
+      err.response?.data?.error ||
+        "Could not update invoice."
+    );
+  } finally {
+    setSavingInvoice(false);
+  }
+};
 
   const openReplace = (order, item) => {
     setReplaceModal({ order, item });
@@ -418,18 +534,351 @@ export default function AdminOrders() {
                             ${order.total_amount.toFixed(2)}
                           </span>
                         </div>
+                           {order.invoice ? (
+                                <button
+                                  onClick={() => openInvoiceEditor(order)}
+                                  className="mt-4 w-full px-4 py-2.5 rounded-xl
+                                            bg-brand-600 text-white text-sm font-semibold
+                                            hover:bg-brand-700"
+                                >
+                                  Edit Invoice
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleRaiseInvoice(order)}
+                                  disabled={raisingInvoice[order.id]}
+                                  className="mt-4 w-full px-4 py-2.5 rounded-xl
+                                            bg-brand-600 text-white text-sm font-semibold
+                                            disabled:opacity-50 hover:bg-brand-700"
+                                >
+                                  {raisingInvoice[order.id]
+                                    ? "Raising Invoice..."
+                                    : "Raise Invoice"}
+                                </button>
+                              )}
+                          </div>
 
                       </div>
                     </div>
                   </div>
-
-                </div>
               )}
             </div>
           );
         })}
       </div>
+      {/* Invoice editor modal */}
+      {editingInvoice && (
+        <div className="fixed inset-0 z-50 bg-black/40
+                        flex items-center justify-center p-4">
 
+          <div className="bg-white rounded-2xl shadow-xl
+                          w-full max-w-2xl max-h-[90vh]
+                          overflow-hidden">
+
+            {/* Header */}
+            <div className="flex items-center justify-between
+                            p-5 border-b border-gray-100">
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Invoice
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  {editingInvoice.invoice.invoice_number}
+                </p>
+              </div>
+
+              <button
+                onClick={closeInvoiceEditor}
+                disabled={savingInvoice}
+                className="p-2 rounded-lg hover:bg-gray-100
+                           disabled:opacity-50"
+              >
+                <FiX />
+              </button>
+
+            </div>
+
+            {/* Invoice content */}
+            <div className="p-5 overflow-y-auto max-h-[65vh]">
+
+              <div className="mb-5">
+                <h3 className="font-semibold text-gray-900">
+                  Items
+                </h3>
+
+                <p className="text-xs text-gray-400 mt-1">
+                  California tax can be adjusted for this invoice.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+
+                {editingInvoice.invoice.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="border border-gray-100
+                               rounded-xl p-4"
+                  >
+
+                    {/* Product row */}
+                    <div className="flex items-start
+                                    justify-between gap-4">
+
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">
+                          {item.product_name}
+                        </p>
+
+                        <p className="text-xs text-gray-400 mt-1">
+                          {item.quantity} × $
+                          {Number(item.unit_price).toFixed(2)}
+                        </p>
+                      </div>
+
+                      <p className="font-semibold text-gray-900">
+                        ${Number(item.line_total).toFixed(2)}
+                      </p>
+
+                    </div>
+
+                    {/* Tax controls */}
+                    <div className="mt-4 pt-3
+                                    border-t border-gray-100
+                                    flex flex-wrap items-center
+                                    gap-5">
+
+                      {/* Taxable */}
+                      <label className="flex items-center gap-2
+                                        text-sm text-gray-700
+                                        cursor-pointer">
+
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.taxable)}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              item.id,
+                              "taxable",
+                              e.target.checked
+                            )
+                          }
+                          className="h-4 w-4"
+                        />
+
+                        Taxable
+                      </label>
+
+                      {/* Tax percentage */}
+                      <label className="flex items-center gap-2
+                                        text-sm text-gray-700">
+
+                        CA Tax
+
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={item.tax_percentage}
+                          disabled={!item.taxable}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              item.id,
+                              "tax_percentage",
+                              e.target.value
+                            )
+                          }
+                          className="w-20 px-2.5 py-1.5
+                                     border border-gray-200
+                                     rounded-lg text-sm
+                                     text-right
+                                     disabled:bg-gray-100
+                                     disabled:text-gray-400"
+                        />
+
+                        <span className="text-gray-400">
+                          %
+                        </span>
+                      </label>
+
+                      {/* Tax amount */}
+                      <div className="ml-auto text-right">
+
+                        <p className="text-xs text-gray-400">
+                          Tax
+                        </p>
+
+                        <p className="text-sm font-semibold
+                                      text-gray-800">
+                          $
+                          {(
+                            Number(item.line_total || 0) *
+                            (
+                              item.taxable
+                                ? Number(item.tax_percentage || 0)
+                                : 0
+                            ) /
+                            100
+                          ).toFixed(2)}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                ))}
+
+              </div>
+
+              {/* Invoice totals */}
+              <div className="mt-6 border-t border-gray-200
+                              pt-4">
+
+                <div className="space-y-2 text-sm">
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      Subtotal
+                    </span>
+
+                    <span className="font-medium">
+                      $
+                      {Number(
+                        editingInvoice.invoice.subtotal || 0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      Delivery
+                    </span>
+
+                    <span className="font-medium">
+                      $
+                      {Number(
+                        editingInvoice.invoice.delivery_fee || 0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      CA Tax
+                    </span>
+
+                    <span className="font-medium">
+                      $
+                      {editingInvoice.invoice.items
+                        .reduce(
+                          (sum, item) =>
+                            sum +
+                            (
+                              Number(item.line_total || 0) *
+                              (
+                                item.taxable
+                                  ? Number(
+                                      item.tax_percentage || 0
+                                    )
+                                  : 0
+                              ) /
+                              100
+                            ),
+                          0
+                        )
+                        .toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-gray-200
+                                  pt-3 mt-3
+                                  flex justify-between">
+
+                    <span className="font-bold text-gray-900">
+                      Total
+                    </span>
+
+                    <span className="font-bold text-lg
+                                      text-gray-900">
+
+                      $
+                      {(
+                        Number(
+                          editingInvoice.invoice.subtotal || 0
+                        ) +
+                        Number(
+                          editingInvoice.invoice.delivery_fee || 0
+                        ) -
+                        Number(
+                          editingInvoice.invoice.discount_amount || 0
+                        ) +
+                        editingInvoice.invoice.items.reduce(
+                          (sum, item) =>
+                            sum +
+                            (
+                              Number(item.line_total || 0) *
+                              (
+                                item.taxable
+                                  ? Number(
+                                      item.tax_percentage || 0
+                                    )
+                                  : 0
+                              ) /
+                              100
+                            ),
+                          0
+                        )
+                      ).toFixed(2)}
+
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end
+                            gap-3 p-5 border-t border-gray-100">
+
+              <button
+                onClick={closeInvoiceEditor}
+                disabled={savingInvoice}
+                className="px-4 py-2.5 rounded-xl
+                           border border-gray-200
+                           text-sm font-semibold
+                           text-gray-700
+                           hover:bg-gray-50
+                           disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleSaveInvoice}
+                disabled={savingInvoice}
+                className="px-5 py-2.5 rounded-xl
+                           bg-brand-600 text-white
+                           text-sm font-semibold
+                           hover:bg-brand-700
+                           disabled:opacity-50"
+              >
+                {savingInvoice
+                  ? "Saving..."
+                  : "Save Invoice"}
+              </button>
+
+            </div>
+
+          </div>
+        </div>
+      )}
       {/* Replace modal */}
       {replaceModal && (
         <div className="fixed inset-0 z-50 bg-black/40

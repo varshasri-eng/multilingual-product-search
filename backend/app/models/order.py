@@ -55,6 +55,12 @@ class Order(db.Model):
         }
         if include_items:
             data["items"] = [i.to_dict() for i in self.items]
+
+        if self.invoice:
+            data["invoice"] = self.invoice.to_dict()
+        else:
+            data["invoice"] = None
+
         return data
 
 

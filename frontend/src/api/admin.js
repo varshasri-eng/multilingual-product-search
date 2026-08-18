@@ -41,6 +41,14 @@ export const removeOrderItem = (orderId, itemId) =>
 export const replaceOrderItem = (orderId, itemId, data) =>
   api.put(`/admin/orders/${orderId}/items/${itemId}/replace`, data);
 
+// ── Invoice management ───────────────────────────────────────
+
+export const raiseOrderInvoice = (orderId) =>
+  api.post(`/admin/orders/${orderId}/invoice`);
+
+export const updateOrderInvoice = (orderId, data) =>
+  api.put(`/admin/orders/${orderId}/invoice`, data);
+
 // ── Search insights ──────────────────────────────────────────
 export const getSearchLogs = (params = {}) =>
   api.get("/admin/search-logs", { params });

@@ -1,4 +1,4 @@
--- =============================================================
+﻿-- =============================================================
 -- Store2Home MVP Database Schema
 -- Local delivery of flowers, leaves & groceries
 -- Serving Lathrop and Mountain House, CA
@@ -82,8 +82,7 @@ CREATE TABLE products (
     price               NUMERIC(10,2) NOT NULL,
     discounted_price    NUMERIC(10,2),
     unit                VARCHAR(50),        -- "per bunch", "per piece", "100gm", "5ft"
-    taxable = db.Column(db.Boolean, default=True, nullable=False)
-    tax_percentage = db.Column(db.Numeric(5, 2), default=9.00, nullable=False)
+
     -- Details
     description         TEXT,
     image_url           TEXT,
@@ -168,31 +167,9 @@ CREATE INDEX idx_addresses_customer ON addresses(customer_id);
 
 -- =============================================================
 -- SECTION 7: OTP / SESSIONS
--- Phone OTP login — no passwords
+-- Phone OTP login ΓÇö no passwords
 -- =============================================================
 
-CREATE TABLE otp_verifications (
-    id              SERIAL PRIMARY KEY,
-    phone           VARCHAR(20) NOT NULL,
-    otp_code        VARCHAR(10) NOT NULL,
-    is_used         BOOLEAN DEFAULT FALSE,
-    expires_at      TIMESTAMPTZ NOT NULL,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_otp_phone ON otp_verifications(phone);
-
-CREATE TABLE sessions (
-    id              SERIAL PRIMARY KEY,
-    customer_id     INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    token           VARCHAR(255) NOT NULL UNIQUE,
-    is_active       BOOLEAN DEFAULT TRUE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    expires_at      TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX idx_sessions_token      ON sessions(token);
-CREATE INDEX idx_sessions_customer   ON sessions(customer_id);
 
 -- =============================================================
 -- SECTION 8: ORDERS
@@ -398,7 +375,7 @@ CREATE TABLE IF NOT EXISTS household_members (
 
 -- =============================================================
 -- SECTION 15: CUSTOMER ADDRESS LINKS
--- Junction table: many customers ↔ many addresses
+-- Junction table: many customers Γåö many addresses
 -- Two customers can share the same address_id (household)
 -- =============================================================
 
@@ -452,3 +429,5 @@ BEGIN
     ALTER TABLE customers ADD COLUMN household_id INTEGER REFERENCES households(id);
   END IF;
 END$$;
+
+

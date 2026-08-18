@@ -19,6 +19,8 @@ from app import db
 from app.models.customer import Customer
 from app.models.address import Address, CustomerAddress
 from app.models.order import Order, OrderItem
+from app.models.invoice import Invoice
+from app.models.invoice_item import InvoiceItem
 from app.models.product import Product
 from app.utils.auth import admin_required
 
@@ -95,9 +97,260 @@ def list_orders(customer):
                 else None
             ),
             "items": items,
+            "invoice": order.invoice.to_dict() if order.invoice else None,
         })
 
     return jsonify({"results": results}), 200
+# ── RAISE INVOICE ─────────────────────────────────────────────
+@admin_bp.route("/orders/<int:order_id>/invoice", methods=["POST"])
+@admin_required
+def create_order_invoice(customer, order_id):
+    """
+    Raise an invoice for the finalized order.
+
+    Tax settings are copied from each product into invoice_items.
+    These values become editable invoice-specific values later.
+    """
+
+    order = Order.query.get(order_id)
+
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    # Prevent duplicate invoices
+    existing_invoice = Invoice.query.filter_by(order_id=order_id).first()
+
+    if existing_invoice:
+        return jsonify({
+            "message": "Invoice already exists for this order.",
+            "invoice": existing_invoice.to_dict(),
+        }), 200
+
+    # Generate invoice number
+    invoice_number = f"INV-{order.id:06d}"
+
+    # Create invoice first
+    invoice = Invoice(
+        invoice_number=invoice_number,
+        order_id=order.id,
+        subtotal=order.subtotal or 0,
+        delivery_fee=order.delivery_fee or 0,
+        discount_amount=order.discount_amount or 0,
+        tax_amount=0,
+        total_amount=order.total_amount or 0,
+        status="issued",
+    )
+
+    db.session.add(invoice)
+
+    # Flush so invoice.id is available
+    db.session.flush()
+
+    tax_total = 0
+
+    # Create invoice item snapshots
+    for order_item in order.items:
+
+        product = None
+
+        if order_item.product_id:
+            product = Product.query.get(order_item.product_id)
+
+        taxable = bool(product.taxable) if product else False
+
+        tax_percentage = (
+            float(product.tax_percentage or 0)
+            if product and taxable
+            else 0
+        )
+
+        line_total = float(order_item.line_total or 0)
+
+        tax_amount = (
+            round(line_total * tax_percentage / 100, 2)
+            if taxable
+            else 0
+        )
+
+        tax_total += tax_amount
+
+        invoice_item = InvoiceItem(
+            invoice_id=invoice.id,
+            order_item_id=order_item.id,
+            product_id=order_item.product_id,
+            product_name=order_item.product_name,
+            quantity=order_item.quantity,
+            unit_price=order_item.unit_price or 0,
+            line_total=line_total,
+            taxable=taxable,
+            tax_percentage=tax_percentage,
+            tax_amount=tax_amount,
+        )
+
+        db.session.add(invoice_item)
+
+    tax_total = round(tax_total, 2)
+
+    # Invoice total = order total + tax
+    invoice.tax_amount = tax_total
+    invoice.total_amount = round(
+        float(invoice.subtotal or 0)
+        + float(invoice.delivery_fee or 0)
+        - float(invoice.discount_amount or 0)
+        + tax_total,
+        2,
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Invoice raised successfully.",
+        "invoice": invoice.to_dict(),
+    }), 201
+
+@admin_bp.route("/orders/<int:order_id>/invoice", methods=["PUT"])
+@admin_required
+def update_order_invoice(customer, order_id):
+    """
+    Update invoice-specific tax settings and recalculate totals.
+    Product tax settings are not modified.
+    """
+
+    order = Order.query.get(order_id)
+
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    invoice = Invoice.query.filter_by(order_id=order_id).first()
+
+    if not invoice:
+        return jsonify({"error": "Invoice not found for this order."}), 404
+
+    data = request.get_json(silent=True) or {}
+    
+    discount_amount = data.get(
+        "discount_amount",
+        invoice.discount_amount or 0
+    )
+
+    try:
+        discount_amount = float(discount_amount)
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Discount amount must be a number."
+        }), 400
+
+    if discount_amount < 0:
+        return jsonify({
+            "error": "Discount cannot be negative."
+        }), 400
+
+    subtotal = float(invoice.subtotal or 0)
+    delivery_fee = float(invoice.delivery_fee or 0)
+
+    if discount_amount > subtotal + delivery_fee:
+        return jsonify({
+            "error": "Discount cannot exceed the invoice amount."
+        }), 400
+
+    invoice.discount_amount = round(discount_amount, 2)
+
+    items_data = data.get("items")
+
+    if not isinstance(items_data, list):
+      return jsonify({
+        "error": "Invoice items are required."
+    }), 400
+
+
+    if not isinstance(items_data, list):
+        return jsonify({
+            "error": "Invoice items are required."
+        }), 400
+
+    invoice_items = InvoiceItem.query.filter_by(
+        invoice_id=invoice.id
+    ).all()
+
+    submitted_ids = {
+        item_data.get("id")
+        for item_data in items_data
+    }
+
+    existing_ids = {item.id for item in invoice_items}
+
+    if submitted_ids != existing_ids:
+        return jsonify({
+            "error": "Invoice items do not match the existing invoice."
+        }), 400
+
+    tax_total = 0
+
+    for item_data in items_data:
+        invoice_item = next(
+            item for item in invoice_items
+            if item.id == item_data.get("id")
+        )
+
+        taxable = bool(
+            item_data.get("taxable", invoice_item.taxable)
+        )
+
+        try:
+            tax_percentage = float(
+                item_data.get(
+                    "tax_percentage",
+                    invoice_item.tax_percentage
+                )
+            )
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "Tax percentage must be a number."
+            }), 400
+
+        if tax_percentage < 0 or tax_percentage > 100:
+            return jsonify({
+                "error": "Tax percentage must be between 0 and 100."
+            }), 400
+
+        invoice_item.taxable = taxable
+        invoice_item.tax_percentage = (
+            tax_percentage if taxable else 0
+        )
+
+        line_total = float(invoice_item.line_total or 0)
+
+        invoice_item.tax_amount = (
+            round(
+                line_total
+                * invoice_item.tax_percentage
+                / 100,
+                2
+            )
+            if invoice_item.taxable
+            else 0
+        )
+
+        tax_total += invoice_item.tax_amount
+
+    tax_total = round(tax_total, 2)
+
+    invoice.tax_amount = tax_total
+
+    invoice.total_amount = round(
+        float(invoice.subtotal or 0)
+        + float(invoice.delivery_fee or 0)
+        - float(invoice.discount_amount or 0)
+        + tax_total,
+        2,
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Invoice updated successfully.",
+        "invoice": invoice.to_dict(),
+    }), 200
 
 # ── REMOVE ORDER ITEM ─────────────────────────────────────────
 @admin_bp.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
