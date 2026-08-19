@@ -262,12 +262,6 @@ def update_order_invoice(customer, order_id):
         "error": "Invoice items are required."
     }), 400
 
-
-    if not isinstance(items_data, list):
-        return jsonify({
-            "error": "Invoice items are required."
-        }), 400
-
     invoice_items = InvoiceItem.query.filter_by(
         invoice_id=invoice.id
     ).all()
