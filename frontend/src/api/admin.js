@@ -42,10 +42,13 @@ export const replaceOrderItem = (orderId, itemId, data) =>
   api.put(`/admin/orders/${orderId}/items/${itemId}/replace`, data);
 
 // ── Invoice management ───────────────────────────────────────
+// raiseOrderInvoice creates a brand new invoice (POST). It must be
+// called only on Save (never on Edit Invoice), and must carry the
+// discount/tax settings the admin chose in the invoice editor.
+export const raiseOrderInvoice = (orderId, data) =>
+  api.post(`/admin/orders/${orderId}/invoice`, data);
 
-export const raiseOrderInvoice = (orderId) =>
-  api.post(`/admin/orders/${orderId}/invoice`);
-
+// updateOrderInvoice updates an existing invoice (PUT).
 export const updateOrderInvoice = (orderId, data) =>
   api.put(`/admin/orders/${orderId}/invoice`, data);
 

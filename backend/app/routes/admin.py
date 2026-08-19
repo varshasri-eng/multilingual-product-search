@@ -101,15 +101,34 @@ def list_orders(customer):
         })
 
     return jsonify({"results": results}), 200
+
+
 # ── RAISE INVOICE ─────────────────────────────────────────────
 @admin_bp.route("/orders/<int:order_id>/invoice", methods=["POST"])
 @admin_required
 def create_order_invoice(customer, order_id):
     """
-    Raise an invoice for the finalized order.
+    Create a new invoice for an order.
 
-    Tax settings are copied from each product into invoice_items.
-    These values become editable invoice-specific values later.
+    This is only ever called from "Save Invoice" in the invoice editor
+    for an order that does not yet have an invoice — never from
+    "Edit Invoice" itself.
+
+    Optionally accepts the invoice-specific discount and per-item tax
+    settings the admin chose in the editor:
+
+        {
+            "discount_amount": 0,
+            "items": [
+                {"order_item_id": 123, "taxable": true, "tax_percentage": 9}
+            ]
+        }
+
+    Any order item not present in "items" (or if "items"/the request
+    body is omitted entirely) defaults to non-taxable with 0% tax, and
+    discount defaults to 0. Tax settings here are invoice-specific and
+    are never copied from — or written back to — the product's own
+    tax configuration.
     """
 
     order = Order.query.get(order_id)
@@ -126,6 +145,67 @@ def create_order_invoice(customer, order_id):
             "invoice": existing_invoice.to_dict(),
         }), 200
 
+    data = request.get_json(silent=True) or {}
+
+    subtotal = float(order.subtotal or 0)
+    delivery_fee = float(order.delivery_fee or 0)
+
+    # ── Discount ────────────────────────────────────────────
+    discount_amount = data.get("discount_amount", 0)
+
+    try:
+        discount_amount = float(discount_amount)
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Discount amount must be a number."
+        }), 400
+
+    if discount_amount < 0:
+        return jsonify({
+            "error": "Discount cannot be negative."
+        }), 400
+
+    if discount_amount > subtotal + delivery_fee:
+        return jsonify({
+            "error": "Discount cannot exceed the invoice amount."
+        }), 400
+
+    # ── Per-item tax settings submitted by the admin ─────────
+    items_data = data.get("items")
+
+    settings_by_order_item_id = {}
+
+    if items_data is not None:
+        if not isinstance(items_data, list):
+            return jsonify({
+                "error": "Invoice items must be a list."
+            }), 400
+
+        for item_data in items_data:
+            order_item_id = item_data.get("order_item_id")
+
+            if order_item_id is None:
+                continue
+
+            taxable = bool(item_data.get("taxable", False))
+
+            try:
+                tax_percentage = float(item_data.get("tax_percentage", 0))
+            except (TypeError, ValueError):
+                return jsonify({
+                    "error": "Tax percentage must be a number."
+                }), 400
+
+            if tax_percentage < 0 or tax_percentage > 100:
+                return jsonify({
+                    "error": "Tax percentage must be between 0 and 100."
+                }), 400
+
+            settings_by_order_item_id[order_item_id] = {
+                "taxable": taxable,
+                "tax_percentage": tax_percentage if taxable else 0,
+            }
+
     # Generate invoice number
     invoice_number = f"INV-{order.id:06d}"
 
@@ -133,9 +213,9 @@ def create_order_invoice(customer, order_id):
     invoice = Invoice(
         invoice_number=invoice_number,
         order_id=order.id,
-        subtotal=order.subtotal or 0,
-        delivery_fee=order.delivery_fee or 0,
-        discount_amount=order.discount_amount or 0,
+        subtotal=subtotal,
+        delivery_fee=delivery_fee,
+        discount_amount=round(discount_amount, 2),
         tax_amount=0,
         total_amount=order.total_amount or 0,
         status="issued",
@@ -148,21 +228,18 @@ def create_order_invoice(customer, order_id):
 
     tax_total = 0
 
-    # Create invoice item snapshots
+    # Create invoice item snapshots, applying the submitted (or default)
+    # tax settings for each order item.
     for order_item in order.items:
 
-        product = None
+        settings = settings_by_order_item_id.get(order_item.id)
 
-        if order_item.product_id:
-            product = Product.query.get(order_item.product_id)
-
-        taxable = bool(product.taxable) if product else False
-
-        tax_percentage = (
-            float(product.tax_percentage or 0)
-            if product and taxable
-            else 0
-        )
+        if settings is not None:
+            taxable = settings["taxable"]
+            tax_percentage = settings["tax_percentage"]
+        else:
+            taxable = False
+            tax_percentage = 0
 
         line_total = float(order_item.line_total or 0)
 
@@ -191,11 +268,11 @@ def create_order_invoice(customer, order_id):
 
     tax_total = round(tax_total, 2)
 
-    # Invoice total = order total + tax
+    # Invoice total = subtotal + delivery - discount + tax
     invoice.tax_amount = tax_total
     invoice.total_amount = round(
-        float(invoice.subtotal or 0)
-        + float(invoice.delivery_fee or 0)
+        subtotal
+        + delivery_fee
         - float(invoice.discount_amount or 0)
         + tax_total,
         2,
@@ -207,6 +284,7 @@ def create_order_invoice(customer, order_id):
         "message": "Invoice raised successfully.",
         "invoice": invoice.to_dict(),
     }), 201
+
 
 @admin_bp.route("/orders/<int:order_id>/invoice", methods=["PUT"])
 @admin_required

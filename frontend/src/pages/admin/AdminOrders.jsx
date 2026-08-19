@@ -14,6 +14,7 @@ import {
   getAdminOrders,
   removeOrderItem,
   replaceOrderItem,
+  raiseOrderInvoice,
   updateOrderInvoice,
 } from "../../api/admin";
 import api from "../../api/client";
@@ -31,7 +32,6 @@ export default function AdminOrders() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [replacementQuantity, setReplacementQuantity] = useState(1);
   const [replacing, setReplacing] = useState(false);
-  const [raisingInvoice, setRaisingInvoice] = useState({});
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [savingInvoice, setSavingInvoice] = useState(false);
 
@@ -77,181 +77,156 @@ export default function AdminOrders() {
       );
     }
   };
-// ── RAISE INVOICE ─────────────────────────────────────────
-  const handleRaiseInvoice = async (order) => {
-    const confirmed = window.confirm(
-      `Raise invoice for order ${order.order_number}?`
-    );
 
-    if (!confirmed) return;
-
-    try {
-      setRaisingInvoice((prev) => ({
-        ...prev,
-        [order.id]: true,
-      }));
-
-      const res = await api.post(
-        `/admin/orders/${order.id}/invoice`
-      );
-
-      toast.success(
-        res.data?.message || "Invoice raised successfully."
-      );
-
-      await loadOrders();
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error || "Could not raise invoice."
-      );
-    } finally {
-      setRaisingInvoice((prev) => ({
-        ...prev,
-        [order.id]: false,
-      }));
+  // ── EDIT INVOICE ────────────────────────────────────────────
+  // Edit Invoice never creates anything by itself. It only opens the
+  // editor: on an existing invoice it loads that invoice, on a new
+  // order it prepares an in-memory draft. The invoice is only ever
+  // persisted when the admin clicks "Save Invoice".
+  const handleEditInvoice = (order) => {
+    if (order.invoice) {
+      openInvoiceEditor(order);
+      return;
     }
+
+    openDraftInvoiceEditor(order);
   };
-  const handleEditInvoice = async (order) => {
-  // If invoice already exists, just open the editor.
-  if (order.invoice) {
-    openInvoiceEditor(order);
-    return;
-  }
 
-  const confirmed = window.confirm(
-    `Create invoice for order ${order.order_number}?`
-  );
-
-  if (!confirmed) return;
-
-  try {
-    setRaisingInvoice((prev) => ({
-      ...prev,
-      [order.id]: true,
-    }));
-
-    const res = await api.post(
-      `/admin/orders/${order.id}/invoice`
-    );
-
-    const invoice = res.data?.invoice;
-
-    if (!invoice) {
-      throw new Error("Invoice was not returned by the server.");
+  const openInvoiceEditor = (order) => {
+    if (!order.invoice) {
+      toast.error("This order does not have an invoice yet.");
+      return;
     }
 
-    // Immediately open the editor with the newly-created invoice.
     setEditingInvoice({
       orderId: order.id,
       invoice: {
-        ...invoice,
-        discount_amount: Number(invoice.discount_amount || 0),
-        items: (invoice.items || []).map((item) => ({
+        ...order.invoice,
+        discount_amount: Number(
+          order.invoice.discount_amount || 0
+        ),
+        items: (order.invoice.items || []).map((item) => ({
           ...item,
         })),
       },
     });
+  };
 
-    // Refresh order data in the background.
-    await loadOrders();
-
-  } catch (err) {
-    toast.error(
-      err.response?.data?.error ||
-        "Could not prepare invoice."
-    );
-  } finally {
-    setRaisingInvoice((prev) => ({
-      ...prev,
-      [order.id]: false,
+  // Builds a draft invoice entirely in frontend state from the
+  // order's existing items/totals. Nothing is sent to the backend
+  // here — this only prepares what the editor needs to display.
+  const openDraftInvoiceEditor = (order) => {
+    const items = (order.items || []).map((item) => ({
+      id: item.id,
+      order_item_id: item.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      line_total: item.line_total,
+      taxable: false,
+      tax_percentage: 0,
+      tax_amount: 0,
     }));
-  }
-};
- const openInvoiceEditor = (order) => {
-  if (!order.invoice) {
-    toast.error("Raise the invoice first.");
-    return;
-  }
 
-  setEditingInvoice({
-    orderId: order.id,
-    invoice: {
-      ...order.invoice,
-      discount_amount: Number(
-        order.invoice.discount_amount || 0
-      ),
-      items: (order.invoice.items || []).map((item) => ({
-        ...item,
-      })),
-    },
-  });
-};
-
-const closeInvoiceEditor = () => {
-  if (savingInvoice) return;
-  setEditingInvoice(null);
-};
-
-const updateInvoiceItem = (itemId, field, value) => {
-  setEditingInvoice((prev) => {
-    if (!prev) return prev;
-
-    return {
-      ...prev,
+    setEditingInvoice({
+      orderId: order.id,
       invoice: {
-        ...prev.invoice,
-        items: prev.invoice.items.map((item) =>
-          item.id === itemId
-            ? {
-                ...item,
-                [field]:
-                  field === "tax_percentage"
-                    ? value
-                    : value,
-              }
-            : item
-        ),
+        id: null,
+        invoice_number: "Draft",
+        subtotal: Number(order.subtotal || 0),
+        delivery_fee: Number(order.delivery_fee || 0),
+        discount_amount: 0,
+        tax_amount: 0,
+        total_amount: Number(order.total_amount || 0),
+        items,
       },
-    };
-  });
-};
+    });
+  };
 
-const handleSaveInvoice = async () => {
-  if (!editingInvoice) return;
-
-  try {
-    setSavingInvoice(true);
-
-    const res = await updateOrderInvoice(
-      editingInvoice.orderId,
-      {
-        discount_amount: Number(
-          editingInvoice.invoice.discount_amount || 0
-        ),
-
-        items: editingInvoice.invoice.items.map((item) => ({
-          id: item.id,
-          taxable: item.taxable,
-          tax_percentage: Number(item.tax_percentage) || 0,
-        })),
-      }
-    );
-
-    toast.success(
-      res.data?.message || "Invoice updated successfully."
-    );
-
+  const closeInvoiceEditor = () => {
+    if (savingInvoice) return;
     setEditingInvoice(null);
-    await loadOrders();
-  } catch (err) {
-    toast.error(
-      err.response?.data?.error ||
-        "Could not update invoice."
+  };
+
+  const updateInvoiceItem = (itemId, field, value) => {
+    setEditingInvoice((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        invoice: {
+          ...prev.invoice,
+          items: prev.invoice.items.map((item) =>
+            item.id === itemId
+              ? {
+                  ...item,
+                  [field]:
+                    field === "tax_percentage"
+                      ? value
+                      : value,
+                }
+              : item
+          ),
+        },
+      };
+    });
+  };
+
+  const handleSaveInvoice = async () => {
+    if (!editingInvoice) return;
+
+    const isExistingInvoice = Boolean(editingInvoice.invoice.id);
+
+    const discountAmount = Number(
+      editingInvoice.invoice.discount_amount || 0
     );
-  } finally {
-    setSavingInvoice(false);
-  }
-};
+
+    try {
+      setSavingInvoice(true);
+
+      let res;
+
+      if (isExistingInvoice) {
+        // Existing invoice — update it.
+        res = await updateOrderInvoice(editingInvoice.orderId, {
+          discount_amount: discountAmount,
+          items: editingInvoice.invoice.items.map((item) => ({
+            id: item.id,
+            taxable: item.taxable,
+            tax_percentage: Number(item.tax_percentage) || 0,
+          })),
+        });
+      } else {
+        // No invoice yet — this is the only place a new invoice
+        // gets created.
+        res = await raiseOrderInvoice(editingInvoice.orderId, {
+          discount_amount: discountAmount,
+          items: editingInvoice.invoice.items.map((item) => ({
+            order_item_id: item.order_item_id,
+            taxable: item.taxable,
+            tax_percentage: Number(item.tax_percentage) || 0,
+          })),
+        });
+      }
+
+      toast.success(
+        res.data?.message ||
+          (isExistingInvoice
+            ? "Invoice updated successfully."
+            : "Invoice created successfully.")
+      );
+
+      setEditingInvoice(null);
+      await loadOrders();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || "Could not save invoice."
+      );
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
 
   const openReplace = (order, item) => {
     setReplaceModal({ order, item });
@@ -599,14 +574,11 @@ const handleSaveInvoice = async () => {
                         </div>
                           <button
                               onClick={() => handleEditInvoice(order)}
-                              disabled={raisingInvoice[order.id]}
                               className="mt-4 w-full px-4 py-2.5 rounded-xl
                                         bg-brand-600 text-white text-sm font-semibold
-                                        disabled:opacity-50 hover:bg-brand-700"
+                                        hover:bg-brand-700"
                             >
-                              {raisingInvoice[order.id]
-                                ? "Preparing Invoice..."
-                                : "Edit Invoice"}
+                              Edit Invoice
                             </button>
                           </div>
 
@@ -816,28 +788,32 @@ const handleSaveInvoice = async () => {
                       ).toFixed(2)}
                     </span>
                   </div>
-                 <div className="flex items-center justify-between">
+
+                  <div className="flex items-center justify-between">
                     <span className="text-gray-500">
                       Discount
                     </span>
 
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editingInvoice.invoice.discount_amount || 0}
-                      onChange={(e) =>
-                        setEditingInvoice((prev) => ({
-                          ...prev,
-                          invoice: {
-                            ...prev.invoice,
-                            discount_amount: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-24 px-2 py-1 border border-gray-200
-                                rounded-lg text-right text-sm"
-                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editingInvoice.invoice.discount_amount || 0}
+                        onChange={(e) =>
+                          setEditingInvoice((prev) => ({
+                            ...prev,
+                            invoice: {
+                              ...prev.invoice,
+                              discount_amount: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-24 px-2 py-1 border border-gray-200
+                                  rounded-lg text-right text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex justify-between">
@@ -880,32 +856,33 @@ const handleSaveInvoice = async () => {
                                       text-gray-900">
 
                       $
-                      {(
+                      {Math.max(
+                        0,
                         Number(
                           editingInvoice.invoice.subtotal || 0
                         ) +
-                        Number(
-                          editingInvoice.invoice.delivery_fee || 0
-                        ) -
-                        Number(
-                          editingInvoice.invoice.discount_amount || 0
-                        ) +
-                        editingInvoice.invoice.items.reduce(
-                          (sum, item) =>
-                            sum +
-                            (
-                              Number(item.line_total || 0) *
+                          Number(
+                            editingInvoice.invoice.delivery_fee || 0
+                          ) -
+                          Number(
+                            editingInvoice.invoice.discount_amount || 0
+                          ) +
+                          editingInvoice.invoice.items.reduce(
+                            (sum, item) =>
+                              sum +
                               (
-                                item.taxable
-                                  ? Number(
-                                      item.tax_percentage || 0
-                                    )
-                                  : 0
-                              ) /
-                              100
-                            ),
-                          0
-                        )
+                                Number(item.line_total || 0) *
+                                (
+                                  item.taxable
+                                    ? Number(
+                                        item.tax_percentage || 0
+                                      )
+                                    : 0
+                                ) /
+                                100
+                              ),
+                            0
+                          )
                       ).toFixed(2)}
 
                     </span>
