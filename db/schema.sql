@@ -239,11 +239,14 @@ CREATE TABLE order_items (
     quantity        INTEGER NOT NULL DEFAULT 1,
     unit_price      NUMERIC(10,2) NOT NULL,
     line_total      NUMERIC(10,2) NOT NULL,
+    delivery_date    DATE,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_order_items_order   ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_id);
+
+
 
 -- =============================================================
 -- SECTION 9: PAYMENTS
@@ -415,6 +418,14 @@ CREATE TABLE IF NOT EXISTS customer_address_links (
 CREATE INDEX IF NOT EXISTS idx_cal_customer ON customer_address_links(customer_id);
 CREATE INDEX IF NOT EXISTS idx_cal_address  ON customer_address_links(address_id);
 
+CREATE TABLE product_delivery_rules (
+    product_id              INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+    restock_cycle           VARCHAR(20) NOT NULL DEFAULT 'none',
+    restock_day_of_week     INTEGER,
+    restock_day_of_month    INTEGER,
+    min_lead_days           INTEGER NOT NULL DEFAULT 0,
+    updated_at              TIMESTAMPTZ DEFAULT NOW()
+);
 -- =============================================================
 -- SECTION 16: OTP VERIFICATIONS & SESSIONS (auth)
 -- =============================================================

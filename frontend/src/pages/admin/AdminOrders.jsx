@@ -437,6 +437,19 @@ export default function AdminOrders() {
                         >
                           {order.status}
                         </span>
+
+                        {order.ready_to_ship === false && (
+                          <span
+                            className="px-2 py-0.5 rounded-full
+                                       bg-red-50 text-red-600
+                                       text-xs font-semibold"
+                            title="One or more items are no longer
+                                   fulfillable (deactivated, removed,
+                                   or a stock issue)."
+                          >
+                            Not ready to ship
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-sm text-gray-500 mt-1">

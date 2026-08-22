@@ -22,6 +22,7 @@ from app.models.order import Order, OrderItem
 from app.models.invoice import Invoice
 from app.models.invoice_item import InvoiceItem
 from app.models.product import Product
+from app.models.delivery_rule import ProductDeliveryRule, VALID_RESTOCK_CYCLES
 from app.utils.auth import admin_required
 
 admin_bp = Blueprint("admin", __name__)
@@ -40,8 +41,22 @@ def list_orders(customer):
 
     Optional:
         ?status=pending
+        ?ready_to_ship=true | false
+            Filters on the computed readiness flag below — does NOT
+            touch the DB, just filters the already-computed results.
+
+    Readiness: stock is reserved for an order's items at the moment
+    the order is placed (see orders.py), so "ready to ship" mostly
+    reduces to "has anything changed since then that would block
+    fulfillment" — a product got deactivated/deleted, or (rare, a
+    concurrent-order race) stock went negative. It is NOT re-checking
+    whether enough stock exists right now for this order's quantity,
+    since that stock was already reserved at order time; a product
+    still being active and having non-negative stock is what "still
+    fulfillable" means at this point.
     """
     status = (request.args.get("status") or "").strip().lower()
+    ready_param = (request.args.get("ready_to_ship") or "").strip().lower()
 
     query = Order.query
 
@@ -56,9 +71,21 @@ def list_orders(customer):
         customer_obj = Customer.query.get(order.customer_id)
 
         items = []
+        ready_to_ship = True
 
         for item in order.items:
             product = Product.query.get(item.product_id) if item.product_id else None
+
+            fulfillable = bool(
+                product
+                and product.is_active
+                and (
+                    product.stock_quantity is None
+                    or product.stock_quantity >= 0
+                )
+            )
+            if not fulfillable:
+                ready_to_ship = False
 
             items.append({
                 "id": item.id,
@@ -72,7 +99,13 @@ def list_orders(customer):
                 "stock_quantity": (
                     product.stock_quantity if product else None
                 ),
+                "fulfillable": fulfillable,
             })
+
+        if ready_param in {"true", "false"}:
+            wants_ready = ready_param == "true"
+            if ready_to_ship != wants_ready:
+                continue
 
         results.append({
             "id": order.id,
@@ -97,6 +130,7 @@ def list_orders(customer):
                 else None
             ),
             "items": items,
+            "ready_to_ship": ready_to_ship,
             "invoice": order.invoice.to_dict() if order.invoice else None,
         })
 
@@ -448,6 +482,13 @@ def remove_order_item(customer, order_id, item_id):
     if not item:
         return jsonify({"error": "Order item not found."}), 404
 
+    # Restore stock for the removed item before deleting it — removing
+    # an item from an order releases that stock back to inventory.
+    if item.product_id:
+        item_product = Product.query.get(item.product_id)
+        if item_product and item_product.stock_quantity is not None:
+            item_product.stock_quantity += item.quantity
+
     # Remove the item
     db.session.delete(item)
     db.session.flush()
@@ -541,6 +582,17 @@ def replace_order_item(customer, order_id, item_id):
             "error": "Replacement product not found."
         }), 404
 
+    # Stock check against the replacement — same guard as a fresh
+    # order, since this is effectively ordering a different product.
+    if (
+        replacement.stock_quantity is not None
+        and quantity > replacement.stock_quantity
+    ):
+        return jsonify({
+            "error": f"Only {replacement.stock_quantity} of "
+                     f"'{replacement.name}' left in stock."
+        }), 409
+
     # Use the replacement product's current price
     unit_price = float(
         replacement.discounted_price
@@ -550,6 +602,13 @@ def replace_order_item(customer, order_id, item_id):
 
     line_total = round(unit_price * quantity, 2)
 
+    # Restore stock for the item being replaced before overwriting it
+    # (its old product_id/quantity are about to be lost).
+    if item.product_id:
+        old_product = Product.query.get(item.product_id)
+        if old_product and old_product.stock_quantity is not None:
+            old_product.stock_quantity += item.quantity
+
     # Update the existing order item
     item.product_id = replacement.id
     item.product_name = replacement.name
@@ -557,6 +616,13 @@ def replace_order_item(customer, order_id, item_id):
     item.quantity = quantity
     item.unit_price = unit_price
     item.line_total = line_total
+
+    # Decrement stock for the newly-assigned product.
+    replacement.stock_quantity = (
+        replacement.stock_quantity - quantity
+        if replacement.stock_quantity is not None
+        else None
+    )
 
     db.session.flush()
 
@@ -597,6 +663,131 @@ def replace_order_item(customer, order_id, item_id):
         "discount_amount": float(order.discount_amount or 0),
         "total_amount": float(order.total_amount),
     }), 200
+
+# ── PRODUCT DELIVERY RULES ────────────────────────────────────
+# Admin-controlled per-product restock/availability rules. Stock
+# itself is untouched here — this only manages when a product is
+# *expected* to become available again once it's out of stock (see
+# utils/delivery.py for how these feed into the availability calc).
+@admin_bp.route("/products/<int:product_id>/delivery-rule", methods=["GET"])
+@admin_required
+def get_delivery_rule(customer, product_id):
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({"error": "Product not found."}), 404
+
+    rule = ProductDeliveryRule.query.get(product_id)
+
+    if not rule:
+        # No rule configured yet — same defaults products.py's
+        # availability endpoint already falls back to.
+        return jsonify({
+            "product_id": product_id,
+            "restock_cycle": "none",
+            "restock_day_of_week": None,
+            "restock_day_of_month": None,
+            "min_lead_days": 0,
+            "updated_at": None,
+        }), 200
+
+    return jsonify(rule.to_dict()), 200
+
+
+@admin_bp.route("/products/<int:product_id>/delivery-rule", methods=["PUT"])
+@admin_required
+def update_delivery_rule(customer, product_id):
+    """
+    Create or update a product's delivery/restock rule.
+
+        {
+            "restock_cycle": "weekly",       // weekly | monthly | none
+            "restock_day_of_week": 3,        // 0=Sun..6=Sat, weekly only
+            "restock_day_of_month": null,    // 1-31, monthly only
+            "min_lead_days": 3
+        }
+
+    The irrelevant day field for the chosen cycle is cleared, not just
+    ignored, so a stale value can't silently linger and get picked up
+    later if restock_cycle changes back.
+    """
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({"error": "Product not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    restock_cycle = data.get("restock_cycle", "none")
+    if restock_cycle not in VALID_RESTOCK_CYCLES:
+        return jsonify({
+            "error": f"restock_cycle must be one of {sorted(VALID_RESTOCK_CYCLES)}"
+        }), 400
+
+    restock_day_of_week = data.get("restock_day_of_week")
+    restock_day_of_month = data.get("restock_day_of_month")
+
+    if restock_cycle == "weekly":
+        if restock_day_of_week is None:
+            return jsonify({
+                "error": "restock_day_of_week is required for a weekly cycle."
+            }), 400
+        try:
+            restock_day_of_week = int(restock_day_of_week)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "restock_day_of_week must be an integer 0-6 (0=Sunday)."
+            }), 400
+        if not (0 <= restock_day_of_week <= 6):
+            return jsonify({
+                "error": "restock_day_of_week must be between 0 (Sunday) and 6 (Saturday)."
+            }), 400
+        restock_day_of_month = None
+
+    elif restock_cycle == "monthly":
+        if restock_day_of_month is None:
+            return jsonify({
+                "error": "restock_day_of_month is required for a monthly cycle."
+            }), 400
+        try:
+            restock_day_of_month = int(restock_day_of_month)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "restock_day_of_month must be an integer 1-31."
+            }), 400
+        if not (1 <= restock_day_of_month <= 31):
+            return jsonify({
+                "error": "restock_day_of_month must be between 1 and 31."
+            }), 400
+        restock_day_of_week = None
+
+    else:  # "none"
+        restock_day_of_week = None
+        restock_day_of_month = None
+
+    min_lead_days = data.get("min_lead_days", 0)
+    try:
+        min_lead_days = int(min_lead_days)
+    except (TypeError, ValueError):
+        return jsonify({"error": "min_lead_days must be a non-negative integer."}), 400
+    if min_lead_days < 0:
+        return jsonify({"error": "min_lead_days must be a non-negative integer."}), 400
+
+    rule = ProductDeliveryRule.query.get(product_id)
+    if not rule:
+        rule = ProductDeliveryRule(product_id=product_id)
+        db.session.add(rule)
+
+    rule.restock_cycle = restock_cycle
+    rule.restock_day_of_week = restock_day_of_week
+    rule.restock_day_of_month = restock_day_of_month
+    rule.min_lead_days = min_lead_days
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Delivery rule updated.",
+        "rule": rule.to_dict(),
+    }), 200
+
 
 # ── LIST CUSTOMERS ───────────────────────────────────────────
 @admin_bp.route("/customers", methods=["GET"])
