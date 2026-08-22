@@ -32,6 +32,7 @@ import CustomerDetail  from "./pages/admin/CustomerDetail";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SearchInsights  from "./pages/admin/SearchInsights";
 import AdminBrandingPage from "./pages/admin/AdminBrandingPage";
+import AdminOrders from "./pages/admin/AdminOrders";
 
 // Layouts
 import CustomerLayout from "./components/CustomerLayout";
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="staff"         element={<StaffManagement />} />
           <Route path="search"        element={<SearchInsights />} />
           <Route path="branding"      element={<AdminBrandingPage />} />
+          <Route path="orders" element={<AdminOrders />} />
         </Route>
 
         {/* ── Defaults ────────────────────────────────── */}

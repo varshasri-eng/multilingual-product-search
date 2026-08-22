@@ -55,6 +55,12 @@ class Order(db.Model):
         }
         if include_items:
             data["items"] = [i.to_dict() for i in self.items]
+
+        if self.invoice:
+            data["invoice"] = self.invoice.to_dict()
+        else:
+            data["invoice"] = None
+
         return data
 
 
@@ -69,6 +75,12 @@ class OrderItem(db.Model):
     quantity     = db.Column(db.Integer, nullable=False, default=1)
     unit_price   = db.Column(db.Numeric(10, 2), nullable=False)
     line_total   = db.Column(db.Numeric(10, 2), nullable=False)
+    # Product-specific earliest-available date the customer selected/
+    # was assigned at order time (see utils/delivery.py). Distinct from
+    # Order.requested_date, which is the overall order-level request —
+    # this is per line item, since different products in the same
+    # order can have different availability (Henna vs. Turmeric).
+    delivery_date = db.Column(db.Date, nullable=True)
     created_at   = db.Column(db.DateTime(timezone=True),
                              default=lambda: datetime.now(timezone.utc))
 
@@ -82,4 +94,7 @@ class OrderItem(db.Model):
             "quantity": self.quantity,
             "unit_price": float(self.unit_price),
             "line_total": float(self.line_total),
+            "delivery_date": (
+                self.delivery_date.isoformat() if self.delivery_date else None
+            ),
         }

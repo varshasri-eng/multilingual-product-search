@@ -18,6 +18,7 @@ const STATUS_STYLE = {
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   useEffect(() => {
     getMyOrders()
@@ -25,7 +26,22 @@ export default function Orders() {
       .catch(() => toast.error("Failed to load orders."))
       .finally(() => setLoading(false));
   }, []);
+    const openInvoice = (order) => {
+      if (!order.invoice) {
+        toast.error("Invoice is not available for this order.");
+        return;
+      }
 
+      setSelectedInvoice(order);
+    };
+
+    const closeInvoice = () => {
+      setSelectedInvoice(null);
+    };
+
+    const printInvoice = () => {
+      window.print();
+    };
   if (loading) {
     return (
       <div className="max-w-2xl">
@@ -106,11 +122,329 @@ export default function Orders() {
                     )}
                   </div>
                 )}
+                {order.invoice && (
+                  <div className="border-t border-gray-100 mt-3 pt-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">
+                          Invoice
+                        </p>
+
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {order.invoice.invoice_number}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">
+                            ${Number(order.invoice.total_amount).toFixed(2)}
+                          </p>
+
+                          <span className="text-xs text-green-700 font-medium">
+                            {order.invoice.status}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => openInvoice(order)}
+                          className="px-3 py-2 rounded-lg bg-gray-900 text-white
+                                    text-xs font-semibold hover:bg-gray-700
+                                    transition-colors"
+                        >
+                          View Invoice
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+      {selectedInvoice && (
+      <InvoiceModal
+        order={selectedInvoice}
+        onClose={closeInvoice}
+        onPrint={printInvoice}
+      />
+    )}
+    </div>
+
+  );
+}
+function InvoiceModal({ order, onClose, onPrint }) {
+  const invoice = order.invoice;
+
+  const subtotal = Number(invoice?.subtotal ?? order.subtotal ?? 0);
+  const deliveryFee = Number(
+    invoice?.delivery_fee ?? order.delivery_fee ?? 0
+  );
+  const discount = Number(
+    invoice?.discount_amount ?? order.discount_amount ?? 0
+  );
+  const total = Number(
+    invoice?.total_amount ?? order.total_amount ?? 0
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center
+                 justify-center p-4"
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl
+                   max-h-[90vh] overflow-y-auto"
+      >
+        {/* Toolbar */}
+        <div
+          className="flex items-center justify-between px-6 py-4
+                     border-b border-gray-200 sticky top-0 bg-white z-10"
+        >
+          <div>
+            <h2 className="font-bold text-gray-900">
+              Invoice Preview
+            </h2>
+
+            <p className="text-xs text-gray-400 mt-0.5">
+              {invoice?.invoice_number}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onPrint}
+              className="px-4 py-2 rounded-lg bg-gray-900 text-white
+                         text-sm font-semibold hover:bg-gray-700"
+            >
+              Print / Download
+            </button>
+
+            <button
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg border border-gray-200
+                         text-gray-600 hover:bg-gray-50"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Invoice */}
+        <div
+          id="store2home-invoice"
+          className="p-8 text-gray-900 bg-white"
+        >
+          {/* Header */}
+          <div
+            className="flex justify-between items-start pb-6 mb-6
+                       border-b-2 border-gray-200"
+          >
+            <div>
+              <h1 className="text-2xl font-extrabold">
+                Store<span className="text-brand-600">2Home</span>
+              </h1>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Grocery Order Invoice
+              </p>
+            </div>
+
+            <div className="text-right">
+              <h2 className="text-xl font-extrabold">
+                INVOICE
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-2">
+                Invoice #:{" "}
+                <strong className="text-gray-900">
+                  {invoice?.invoice_number}
+                </strong>
+              </p>
+
+              <p className="text-sm text-gray-500">
+                Date:{" "}
+                <strong className="text-gray-900">
+                  {invoice?.issued_at
+                    ? new Date(invoice.issued_at).toLocaleDateString()
+                    : new Date(order.created_at).toLocaleDateString()}
+                </strong>
+              </p>
+
+              <p className="text-sm text-gray-500">
+                Order #:{" "}
+                <strong className="text-gray-900">
+                  {order.order_number}
+                </strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Customer / Order information */}
+          <div className="grid grid-cols-2 gap-6 mb-7">
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                Customer
+              </p>
+
+              <p className="font-semibold text-gray-900">
+                Customer #{order.customer_id}
+              </p>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Order #{order.order_number}
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                Order Information
+              </p>
+
+              <p className="text-sm">
+                Type:{" "}
+                <strong>
+                  {order.order_type === "pickup"
+                    ? "Pickup"
+                    : "Delivery"}
+                </strong>
+              </p>
+
+              <p className="text-sm mt-1">
+                Status:{" "}
+                <strong className="capitalize">
+                  {order.status}
+                </strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="mb-6 overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left text-xs uppercase tracking-wide
+                                 text-gray-500 font-semibold p-3
+                                 border-b-2 border-gray-200">
+                    #
+                  </th>
+
+                  <th className="text-left text-xs uppercase tracking-wide
+                                 text-gray-500 font-semibold p-3
+                                 border-b-2 border-gray-200">
+                    Product
+                  </th>
+
+                  <th className="text-center text-xs uppercase tracking-wide
+                                 text-gray-500 font-semibold p-3
+                                 border-b-2 border-gray-200">
+                    Qty
+                  </th>
+
+                  <th className="text-right text-xs uppercase tracking-wide
+                                 text-gray-500 font-semibold p-3
+                                 border-b-2 border-gray-200">
+                    Unit Price
+                  </th>
+
+                  <th className="text-right text-xs uppercase tracking-wide
+                                 text-gray-500 font-semibold p-3
+                                 border-b-2 border-gray-200">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {(order.items || []).map((item, index) => (
+                  <tr key={item.id}>
+                    <td className="p-3 text-sm border-b border-gray-100">
+                      {index + 1}
+                    </td>
+
+                    <td className="p-3 text-sm font-medium
+                                   border-b border-gray-100">
+                      {item.product_name}
+                    </td>
+
+                    <td className="p-3 text-sm text-center
+                                   border-b border-gray-100">
+                      {item.quantity}
+                    </td>
+
+                    <td className="p-3 text-sm text-right
+                                   border-b border-gray-100">
+                      ${Number(item.unit_price).toFixed(2)}
+                    </td>
+
+                    <td className="p-3 text-sm text-right font-semibold
+                                   border-b border-gray-100">
+                      ${Number(item.line_total).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals */}
+          <div className="flex justify-end mb-8">
+            <div className="w-72">
+              <div className="flex justify-between py-2 text-sm text-gray-500">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between py-2 text-sm text-gray-500">
+                <span>Delivery Fee</span>
+                <span>${deliveryFee.toFixed(2)}</span>
+              </div>
+
+              {discount > 0 && (
+                <div className="flex justify-between py-2 text-sm text-gray-500">
+                  <span>Discount</span>
+                  <span>-${discount.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div
+                className="flex justify-between pt-3 mt-2
+                           border-t-2 border-gray-200
+                           font-extrabold text-lg"
+              >
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div
+            className="border-t border-gray-200 pt-5
+                       flex justify-between items-end"
+          >
+            <div>
+              <p className="font-semibold text-sm">
+                Thank you for shopping with Store2Home!
+              </p>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Invoice status:{" "}
+                <span className="text-green-700 font-semibold capitalize">
+                  {invoice?.status || "issued"}
+                </span>
+              </p>
+            </div>
+
+            <div className="text-right text-xs text-gray-400">
+              <p>Store2Home</p>
+              <p>Grocery Order Invoice</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

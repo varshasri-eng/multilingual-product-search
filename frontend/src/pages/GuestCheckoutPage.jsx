@@ -6,11 +6,63 @@ import {
   FiTruck as FiDelivery, FiPackage, FiCalendar, FiClock, FiUser, FiMail, FiPhone,
   FiMapPin,
 } from "react-icons/fi";
-import { getProducts } from "../api/products";
+import { getProducts, getAvailability } from "../api/products";
 import { createGuestOrder } from "../api/orders";
 
 const TIME_SLOTS = ["Morning 9-12", "Afternoon 12-4", "Evening 4-7"];
 const todayISO = () => new Date().toISOString().split("T")[0];
+
+const formatISODate = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDisplayDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+};
+
+// ProductDeliveryRule uses 0=Sunday ... 6=Saturday.
+const getNextRestockDate = (availability) => {
+  const cycle = availability?.restock_cycle;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (cycle === "weekly" && availability.restock_day_of_week != null) {
+    const target = Number(availability.restock_day_of_week);
+    if (!Number.isInteger(target) || target < 0 || target > 6) return null;
+
+    const delta = (target - today.getDay() + 7) % 7;
+    const restock = new Date(today);
+    restock.setDate(today.getDate() + delta);
+    restock.setDate(restock.getDate() + Number(availability.min_lead_days || 0));
+    return formatISODate(restock);
+  }
+
+  if (cycle === "monthly" && availability.restock_day_of_month != null) {
+    const target = Number(availability.restock_day_of_month);
+    if (!Number.isInteger(target) || target < 1 || target > 31) return null;
+
+    const makeCandidate = (year, month) => {
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const day = Math.min(target, lastDay);
+      return new Date(year, month, day);
+    };
+
+    let restock = makeCandidate(today.getFullYear(), today.getMonth());
+    if (restock < today) {
+      restock = makeCandidate(today.getFullYear(), today.getMonth() + 1);
+    }
+    restock.setDate(restock.getDate() + Number(availability.min_lead_days || 0));
+    return formatISODate(restock);
+  }
+
+  return null;
+};
+
 
 function getGuestCart() {
   try { return JSON.parse(localStorage.getItem("s2h_guest_cart") || "{}"); } catch { return {}; }
@@ -37,6 +89,8 @@ export default function GuestCheckoutPage() {
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState("");
   const [slot, setSlot] = useState("");
+  const [availabilityByProduct, setAvailabilityByProduct] = useState({});
+  const [deliveryDateByProduct, setDeliveryDateByProduct] = useState({});
 
   useEffect(() => {
     getProducts()
@@ -45,12 +99,123 @@ export default function GuestCheckoutPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const cartAvailabilityKey = Object.entries(cart)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([id, qty]) => `${id}:${qty}`)
+    .join(",");
+
+  useEffect(() => {
+    if (!products.length) return;
+
+    const ids = cartAvailabilityKey
+      ? cartAvailabilityKey.split(",").map((entry) => Number(entry.split(":")[0])).filter(Boolean)
+      : [];
+
+    if (!ids.length) {
+      setAvailabilityByProduct({});
+      setDeliveryDateByProduct({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAvailability = async () => {
+      const next = {};
+      await Promise.all(ids.map(async (id) => {
+        next[id] = { status: "loading", data: null };
+        try {
+          const res = await getAvailability(id);
+          if (cancelled) return;
+
+          const data = res.data;
+          const quantity = Number(cart[id] || 0);
+          const sufficientStock =
+            data.stock_quantity == null || Number(data.stock_quantity) >= quantity;
+
+          const earliest = sufficientStock
+            ? data.earliest_delivery_date
+            : getNextRestockDate(data);
+
+          next[id] = {
+            status: earliest ? "ready" : "unavailable",
+            data: {
+              ...data,
+              in_stock_for_quantity: sufficientStock,
+              earliest_delivery_date: earliest,
+            },
+          };
+        } catch (error) {
+          if (!cancelled) next[id] = { status: "error", data: null };
+        }
+      }));
+
+      if (!cancelled) {
+        setAvailabilityByProduct(next);
+        setDeliveryDateByProduct((prev) => {
+          const updated = {};
+          ids.forEach((id) => {
+            const earliest = next[id]?.data?.earliest_delivery_date;
+            updated[id] = earliest
+              ? (!prev[id] || prev[id] < earliest ? earliest : prev[id])
+              : "";
+          });
+          return updated;
+        });
+      }
+    };
+
+    loadAvailability();
+
+    return () => { cancelled = true; };
+  }, [cartAvailabilityKey, products.length]);
+
+  const retryAvailability = async (id) => {
+    setAvailabilityByProduct((prev) => ({
+      ...prev,
+      [id]: { status: "loading", data: null },
+    }));
+    try {
+      const res = await getAvailability(id);
+      const data = res.data;
+      const quantity = Number(cart[id] || 0);
+      const sufficientStock =
+        data.stock_quantity == null || Number(data.stock_quantity) >= quantity;
+      const earliest = sufficientStock
+        ? data.earliest_delivery_date
+        : getNextRestockDate(data);
+      setAvailabilityByProduct((prev) => ({
+        ...prev,
+        [id]: {
+          status: earliest ? "ready" : "unavailable",
+          data: {
+            ...data,
+            in_stock_for_quantity: sufficientStock,
+            earliest_delivery_date: earliest,
+          },
+        },
+      }));
+      if (earliest) {
+        setDeliveryDateByProduct((prev) => ({ ...prev, [id]: prev[id] || earliest }));
+      }
+    } catch {
+      setAvailabilityByProduct((prev) => ({
+        ...prev,
+        [id]: { status: "error", data: null },
+      }));
+    }
+  };
+
   const items = Object.entries(cart)
     .map(([id, qty]) => {
       const p = products.find((x) => x.id === Number(id));
       return p ? { ...p, quantity: qty, line_total: Number(p.price) * qty } : null;
     })
     .filter(Boolean);
+
+  const availabilityBlockedItems = items.filter((i) => {
+    const a = availabilityByProduct[i.id];
+    return !a || a.status !== "ready" || !deliveryDateByProduct[i.id];
+  });
 
   const subtotal = items.reduce((s, i) => s + i.line_total, 0);
   const deliveryFee = orderType === "delivery" ? 2.99 : 0;
@@ -84,11 +249,18 @@ export default function GuestCheckoutPage() {
       if (!city.trim()) return toast.error("Please enter your city.");
       if (!zip.trim()) return toast.error("Please enter your zip code.");
     }
+    if (availabilityBlockedItems.length > 0) {
+      return toast.error("Please resolve product availability before placing the order.");
+    }
 
     setPlacing(true);
     try {
       const payload = {
-        items: items.map((i) => ({ product_id: i.id, quantity: i.quantity })),
+        items: items.map((i) => ({
+          product_id: i.id,
+          quantity: i.quantity,
+          delivery_date: deliveryDateByProduct[i.id],
+        })),
         order_type: orderType,
         guest_name: name.trim(),
         guest_email: email.trim(),
@@ -320,34 +492,89 @@ export default function GuestCheckoutPage() {
               </h3>
 
               <div className="space-y-3 mb-5">
-                {items.map((i) => (
-                  <div key={i.id} className="flex items-center gap-3">
-                    <span className="text-2xl flex-shrink-0">{i.emoji || "🛒"}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{i.name}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <button onClick={() => updateQty(i.id, -1)}
-                          className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200
-                                     flex items-center justify-center transition-colors">
-                          <FiMinus size={11} />
-                        </button>
-                        <span className="text-xs font-bold w-4 text-center">{i.quantity}</span>
-                        <button onClick={() => updateQty(i.id, 1)}
-                          className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200
-                                     flex items-center justify-center transition-colors">
-                          <FiPlus size={11} />
-                        </button>
-                        <button onClick={() => removeItem(i.id)}
-                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors">
-                          <FiX size={14} />
-                        </button>
+                {items.map((i) => {
+                  const availability = availabilityByProduct[i.id];
+                  const earliest = availability?.data?.earliest_delivery_date;
+                  const isBackorder = availability?.status === "ready"
+                    && availability.data
+                    && availability.data.in_stock_for_quantity === false;
+
+                  return (
+                    <div key={i.id} className="flex items-start gap-3">
+                      <span className="text-2xl flex-shrink-0">{i.emoji || "🛒"}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900 truncate">{i.name}</p>
+                          {isBackorder && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                              Backorder
+                            </span>
+                          )}
+                        </div>
+
+                        {availability?.status === "loading" && (
+                          <p className="text-xs text-gray-400 mt-1">Checking availability…</p>
+                        )}
+                        {availability?.status === "error" && (
+                          <button
+                            type="button"
+                            onClick={() => retryAvailability(i.id)}
+                            className="text-xs text-red-600 hover:underline mt-1">
+                            Couldn't check availability — Retry
+                          </button>
+                        )}
+                        {availability?.status === "unavailable" && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Currently unavailable — please remove this item or contact us.
+                          </p>
+                        )}
+                        {availability?.status === "ready" && earliest && (
+                          <div className="mt-2 rounded-lg bg-gray-50 p-2">
+                            <p className="text-xs text-gray-500">
+                              {isBackorder ? "Next available:" : "Earliest delivery:"}{" "}
+                              <span className="font-semibold text-gray-800">
+                                {formatDisplayDate(earliest)}
+                              </span>
+                            </p>
+                            <input
+                              type="date"
+                              className="input mt-1.5 text-xs"
+                              min={earliest}
+                              value={deliveryDateByProduct[i.id] || earliest}
+                              onChange={(e) =>
+                                setDeliveryDateByProduct((prev) => ({
+                                  ...prev,
+                                  [i.id]: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <button onClick={() => updateQty(i.id, -1)}
+                            className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200
+                                       flex items-center justify-center transition-colors">
+                            <FiMinus size={11} />
+                          </button>
+                          <span className="text-xs font-bold w-4 text-center">{i.quantity}</span>
+                          <button onClick={() => updateQty(i.id, 1)}
+                            className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200
+                                       flex items-center justify-center transition-colors">
+                            <FiPlus size={11} />
+                          </button>
+                          <button onClick={() => removeItem(i.id)}
+                            className="ml-auto text-gray-400 hover:text-red-500 transition-colors">
+                            <FiX size={14} />
+                          </button>
+                        </div>
                       </div>
+                      <span className="text-sm font-semibold text-gray-900 flex-shrink-0">
+                        ${i.line_total.toFixed(2)}
+                      </span>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900 flex-shrink-0">
-                      ${i.line_total.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="border-t border-gray-100 pt-4 space-y-2 text-sm">
@@ -368,7 +595,7 @@ export default function GuestCheckoutPage() {
               <button
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
                 onClick={placeOrder}
-                disabled={placing || cartCount === 0}>
+                disabled={placing || cartCount === 0 || availabilityBlockedItems.length > 0}>
                 <FiShoppingCart size={15} />
                 {placing ? "Placing order…" : `Place order · $${total.toFixed(2)}`}
               </button>

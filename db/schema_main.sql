@@ -1,4 +1,4 @@
--- =============================================================
+﻿-- =============================================================
 -- Store2Home MVP Database Schema
 -- Local delivery of flowers, leaves & groceries
 -- Serving Lathrop and Mountain House, CA
@@ -82,8 +82,7 @@ CREATE TABLE products (
     price               NUMERIC(10,2) NOT NULL,
     discounted_price    NUMERIC(10,2),
     unit                VARCHAR(50),        -- "per bunch", "per piece", "100gm", "5ft"
-    taxable = db.Column(db.Boolean, default=True, nullable=False)
-    tax_percentage = db.Column(db.Numeric(5, 2), default=9.00, nullable=False)
+
     -- Details
     description         TEXT,
     image_url           TEXT,
@@ -168,31 +167,9 @@ CREATE INDEX idx_addresses_customer ON addresses(customer_id);
 
 -- =============================================================
 -- SECTION 7: OTP / SESSIONS
--- Phone OTP login — no passwords
+-- Phone OTP login ΓÇö no passwords
 -- =============================================================
 
-CREATE TABLE otp_verifications (
-    id              SERIAL PRIMARY KEY,
-    phone           VARCHAR(20) NOT NULL,
-    otp_code        VARCHAR(10) NOT NULL,
-    is_used         BOOLEAN DEFAULT FALSE,
-    expires_at      TIMESTAMPTZ NOT NULL,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_otp_phone ON otp_verifications(phone);
-
-CREATE TABLE sessions (
-    id              SERIAL PRIMARY KEY,
-    customer_id     INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    token           VARCHAR(255) NOT NULL UNIQUE,
-    is_active       BOOLEAN DEFAULT TRUE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    expires_at      TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX idx_sessions_token      ON sessions(token);
-CREATE INDEX idx_sessions_customer   ON sessions(customer_id);
 
 -- =============================================================
 -- SECTION 8: ORDERS
@@ -239,14 +216,11 @@ CREATE TABLE order_items (
     quantity        INTEGER NOT NULL DEFAULT 1,
     unit_price      NUMERIC(10,2) NOT NULL,
     line_total      NUMERIC(10,2) NOT NULL,
-    delivery_date    DATE,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_order_items_order   ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_id);
-
-
 
 -- =============================================================
 -- SECTION 9: PAYMENTS
@@ -401,7 +375,7 @@ CREATE TABLE IF NOT EXISTS household_members (
 
 -- =============================================================
 -- SECTION 15: CUSTOMER ADDRESS LINKS
--- Junction table: many customers ↔ many addresses
+-- Junction table: many customers Γåö many addresses
 -- Two customers can share the same address_id (household)
 -- =============================================================
 
@@ -418,14 +392,6 @@ CREATE TABLE IF NOT EXISTS customer_address_links (
 CREATE INDEX IF NOT EXISTS idx_cal_customer ON customer_address_links(customer_id);
 CREATE INDEX IF NOT EXISTS idx_cal_address  ON customer_address_links(address_id);
 
-CREATE TABLE product_delivery_rules (
-    product_id              INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
-    restock_cycle           VARCHAR(20) NOT NULL DEFAULT 'none',
-    restock_day_of_week     INTEGER,
-    restock_day_of_month    INTEGER,
-    min_lead_days           INTEGER NOT NULL DEFAULT 0,
-    updated_at              TIMESTAMPTZ DEFAULT NOW()
-);
 -- =============================================================
 -- SECTION 16: OTP VERIFICATIONS & SESSIONS (auth)
 -- =============================================================
@@ -463,3 +429,5 @@ BEGIN
     ALTER TABLE customers ADD COLUMN household_id INTEGER REFERENCES households(id);
   END IF;
 END$$;
+
+

@@ -12,3 +12,6 @@ from app.models.order import Order, OrderItem
 from app.models.site_settings import SiteSettings
 
 from app.models.delivery_rule import ProductDeliveryRule
+from app.models.invoice import Invoice
+
+from app.models.invoice_item import InvoiceItem
