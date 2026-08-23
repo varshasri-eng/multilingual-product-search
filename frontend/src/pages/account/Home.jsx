@@ -250,6 +250,7 @@ export default function Home() {
           products={products}
           onClose={() => setShowCheckout(false)}
           onClearCart={() => setCart({})}
+          onUpdateQty={updateQty}
         />
       )}
     </div>
@@ -257,7 +258,7 @@ export default function Home() {
 }
 
 /* ── Checkout modal ─────────────────────────────────────────── */
-function CheckoutModal({ cart, products, onClose, onClearCart }) {
+function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
   const { customer } = useAuth();
   const navigate = useNavigate();
 
@@ -356,26 +357,48 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
 
         <div className="p-6 space-y-5">
           {/* Items */}
-          <div>
-            <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Your Items ({items.length})
-            </p>
-            <div className="space-y-2">
-              {items.map((i) => (
-                <div key={i.id} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-gray-800">
-                    <span className="text-lg">{i.emoji || "🛒"}</span>
-                    {i.name}
-                    <span className="text-gray-400 text-xs">× {i.quantity}</span>
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    ${i.line_total.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Your Items ({items.length})
+                </p>
 
+                <div className="space-y-2">
+                  {items.map((i) => (
+                    <div key={i.id} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-gray-800">
+                        <span className="text-lg">{i.emoji || "🛒"}</span>
+                        {i.name}
+                      </span>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 bg-brand-500 text-white rounded-full px-1.5 py-1">
+                          <button
+                            onClick={() => onUpdateQty(i.id, -1)}
+                            className="p-1 hover:bg-brand-600 rounded-full"
+                          >
+                            <FiMinus size={12} />
+                          </button>
+
+                          <span className="text-xs font-bold w-4 text-center">
+                            {i.quantity}
+                          </span>
+
+                          <button
+                            onClick={() => onUpdateQty(i.id, 1)}
+                            className="p-1 hover:bg-brand-600 rounded-full"
+                          >
+                            <FiPlus size={12} />
+                          </button>
+                        </div>
+
+                        <span className="font-semibold text-gray-900">
+                          ${i.line_total.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
           {/* Order type */}
           <div>
             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
