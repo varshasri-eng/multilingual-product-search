@@ -33,7 +33,7 @@ def _next_occurrence_of_day_of_month(today, day_of_month):
 def get_earliest_delivery_date(today, in_stock, restock_cycle,
                                 restock_day_of_week=None,
                                 restock_day_of_month=None,
-                                min_lead_days=3):
+                                min_lead_days=0):
     """
     Returns the earliest valid delivery date (date object), or None if blocked.
     """

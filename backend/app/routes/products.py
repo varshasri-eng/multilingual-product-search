@@ -251,17 +251,25 @@ def recently_viewed():
 
     return jsonify({"results": results}), 200
 
-
 # ── DELIVERY AVAILABILITY ──────────────────────────────────────
 @products_bp.route("/<int:product_id>/availability", methods=["GET"])
 def product_availability(product_id):
     product = Product.query.get(product_id)
+
     if not product:
         return jsonify({"error": "product not found"}), 404
 
-    rule = ProductDeliveryRule.query.get(product_id)
+    try:
+        requested_quantity = int(request.args.get("quantity", 1))
+    except (TypeError, ValueError):
+        requested_quantity = 1
 
-    in_stock = product.stock_quantity is not None and product.stock_quantity > 0
+    if requested_quantity <= 0:
+        return jsonify({
+            "error": "quantity must be a positive integer"
+        }), 400
+
+    rule = ProductDeliveryRule.query.get(product_id)
 
     if rule is None:
         restock_cycle = "none"
@@ -274,18 +282,40 @@ def product_availability(product_id):
         restock_day_of_month = rule.restock_day_of_month
         min_lead_days = rule.min_lead_days
 
+    # Stock is sufficient only when it can cover the
+    # customer's requested quantity.
+    sufficient_stock = (
+        product.stock_quantity is None
+        or product.stock_quantity >= requested_quantity
+    )
+
     earliest_date = get_earliest_delivery_date(
-        date.today(), in_stock, restock_cycle,
-        restock_day_of_week, restock_day_of_month, min_lead_days
+        date.today(),
+        sufficient_stock,
+        restock_cycle,
+        restock_day_of_week,
+        restock_day_of_month,
+        min_lead_days
     )
 
     return jsonify({
         "product_id": product_id,
-        "in_stock": in_stock,
+        "requested_quantity": requested_quantity,
+
+        "in_stock": product.stock_quantity is not None
+                     and product.stock_quantity > 0,
+
+        "in_stock_for_quantity": sufficient_stock,
+
         "stock_quantity": product.stock_quantity,
+
         "restock_cycle": restock_cycle,
         "restock_day_of_week": restock_day_of_week,
         "restock_day_of_month": restock_day_of_month,
         "min_lead_days": min_lead_days,
-        "earliest_delivery_date": earliest_date.isoformat() if earliest_date else None,
+
+        "earliest_delivery_date": (
+            earliest_date.isoformat()
+            if earliest_date else None
+        ),
     }), 200

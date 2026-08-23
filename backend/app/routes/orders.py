@@ -139,12 +139,67 @@ def _validate_and_price_items(raw_items):
 
     for product_id, total_quantity in requested_by_id.items():
         product = products_by_id[product_id]
-        rule = ProductDeliveryRule.query.get(product_id)
+        rule = ProductDeliveryRule.query.filter_by(
+            product_id=product_id
+        ).first()
 
         restock_cycle = rule.restock_cycle if rule else "none"
         restock_day_of_week = rule.restock_day_of_week if rule else None
         restock_day_of_month = rule.restock_day_of_month if rule else None
         min_lead_days = rule.min_lead_days if rule else 0
+
+        # Validate the rule before using it.
+        if restock_cycle not in {"weekly", "monthly", "none"}:
+            return None, None, None, (
+                jsonify({
+                    "error": (
+                        f"Invalid restock rule configured for "
+                        f"'{product.name}'."
+                    )
+                }),
+                500,
+            )
+
+        if min_lead_days < 0:
+            return None, None, None, (
+                jsonify({
+                    "error": (
+                        f"Invalid minimum lead time configured for "
+                        f"'{product.name}'."
+                    )
+                }),
+                500,
+            )
+
+        if restock_cycle == "weekly":
+            if (
+                restock_day_of_week is None
+                or not 0 <= restock_day_of_week <= 6
+            ):
+                return None, None, None, (
+                    jsonify({
+                        "error": (
+                            f"Invalid weekly restock rule configured for "
+                            f"'{product.name}'."
+                        )
+                    }),
+                    500,
+                )
+
+        if restock_cycle == "monthly":
+            if (
+                restock_day_of_month is None
+                or not 1 <= restock_day_of_month <= 31
+            ):
+                return None, None, None, (
+                    jsonify({
+                        "error": (
+                            f"Invalid monthly restock rule configured for "
+                            f"'{product.name}'."
+                        )
+                    }),
+                    500,
+                )
 
         # Available now only if stock actually COVERS total demand for
         # this product — not just "is it non-zero". Untracked stock
@@ -231,15 +286,12 @@ def _validate_and_price_items(raw_items):
 
 def _reserve_stock(stock_updates):
     """
-    Decrement Product.stock_quantity for each (product, quantity) pair.
+    Decrement Product.stock_quantity for each product.
 
-    Floored at zero — physical stock never goes negative. When the
-    requested quantity exceeds what's on hand (a backorder, already
-    validated as allowed via a restock rule), whatever stock exists
-    gets used up and the remaining shortfall is simply not represented
-    as negative inventory. It isn't tracked as a separate "owed" amount
-    here either — Admin Order Review is the place that deals with an
-    outstanding backorder and the customer, not this decrement step.
+    Stock is never allowed to become negative.
+
+    Uses a row-level lock so concurrent orders cannot reserve
+    the same physical inventory at the same time.
 
     Must only be called after every other order-level validation for
     this request has already passed — it's the last step before
@@ -248,8 +300,25 @@ def _reserve_stock(stock_updates):
     etc.) never decrements stock in the first place.
     """
     for product, quantity in stock_updates:
-        if product.stock_quantity is not None:
-            product.stock_quantity = max(0, product.stock_quantity - quantity)
+        if product.stock_quantity is None:
+            continue
+
+        locked_product = (
+            Product.query
+            .filter_by(id=product.id)
+            .with_for_update()
+            .first()
+        )
+
+        if not locked_product:
+            raise ValueError(
+                f"Product {product.id} no longer exists."
+            )
+
+        locked_product.stock_quantity = max(
+            0,
+            locked_product.stock_quantity - quantity
+        )
 
 
 @orders_bp.route("", methods=["GET"])
@@ -318,15 +387,35 @@ def create_order(customer):
     # ── scheduling (optional) ─────────────────────────────────
     requested_date = None
     requested_time_slot = data.get("requested_time_slot") or None
+
     if requested_time_slot and requested_time_slot not in VALID_TIME_SLOTS:
         return jsonify({"error": "Invalid time slot."}), 400
 
     date_str = data.get("requested_date")
+
     if date_str:
         try:
             requested_date = date.fromisoformat(date_str)
         except ValueError:
-            return jsonify({"error": "Invalid requested_date. Use YYYY-MM-DD."}), 400
+            return jsonify({
+                "error": "Invalid requested_date. Use YYYY-MM-DD."
+            }), 400
+
+        # The requested order date cannot be earlier than the
+        # earliest date required by any product in the cart.
+        earliest_order_date = max(
+            item.delivery_date
+            for item in items
+            if item.delivery_date
+        )
+
+        if requested_date < earliest_order_date:
+            return jsonify({
+                "error": (
+                    f"The earliest available date for this order is "
+                    f"{earliest_order_date.isoformat()}."
+                )
+            }), 400
 
     # Every order-level validation has now passed — safe to reserve
     # stock and create the order as a single atomic step.
@@ -452,15 +541,35 @@ def create_guest_order():
     # ── scheduling (optional) ─────────────────────────────
     requested_date = None
     requested_time_slot = data.get("requested_time_slot") or None
+
     if requested_time_slot and requested_time_slot not in VALID_TIME_SLOTS:
         return jsonify({"error": "Invalid time slot."}), 400
 
     date_str = data.get("requested_date")
+
     if date_str:
         try:
             requested_date = date.fromisoformat(date_str)
         except ValueError:
-            return jsonify({"error": "Invalid requested_date. Use YYYY-MM-DD."}), 400
+            return jsonify({
+                "error": "Invalid requested_date. Use YYYY-MM-DD."
+            }), 400
+
+        # The requested order date cannot be earlier than the
+        # earliest date required by any product in the cart.
+        earliest_order_date = max(
+            item.delivery_date
+            for item in items
+            if item.delivery_date
+        )
+
+        if requested_date < earliest_order_date:
+            return jsonify({
+                "error": (
+                    f"The earliest available date for this order is "
+                    f"{earliest_order_date.isoformat()}."
+                )
+            }), 400
 
     # Every order-level validation has now passed — safe to reserve
     # stock and create the order as a single atomic step.

@@ -5,7 +5,11 @@ import {
   FiPlus, FiMinus, FiShoppingCart, FiSearch,
   FiX, FiCheckCircle, FiTruck as FiDelivery, FiPackage, FiCalendar, FiClock,
 } from "react-icons/fi";
-import { getProducts, getCategories } from "../../api/products";
+import {
+  getProducts,
+  getCategories,
+  getAvailability,
+} from "../../api/products";
 import { createOrder } from "../../api/orders";
 import { getAddresses } from "../../api/customers";
 import { useAuth } from "../../context/AuthContext";
@@ -214,7 +218,7 @@ export default function Home() {
 
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <p className="font-bold text-gray-900">
-                    ${Number(p.price).toFixed(2)}
+                    ${Number(p.discounted_price ?? p.price).toFixed(2)}
                   </p>
 
                   {qty === 0 ? (
@@ -269,13 +273,87 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
   const [slot, setSlot] = useState("");
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(null);
+  const [availabilityByProduct, setAvailabilityByProduct] = useState({});
 
   const items = Object.entries(cart)
     .map(([id, qty]) => {
       const p = products.find((x) => x.id === Number(id));
-      return p ? { ...p, quantity: qty, line_total: Number(p.price) * qty } : null;
+      return p ? { ...p, quantity: qty, line_total: Number(p.discounted_price ?? p.price) * qty } : null;
     })
     .filter(Boolean);
+
+  const cartAvailabilityKey = Object.entries(cart)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([id, qty]) => `${id}:${qty}`)
+    .join(",");
+
+  useEffect(() => {
+    if (!items.length) {
+      setAvailabilityByProduct({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAvailability = async () => {
+      const next = {};
+
+      await Promise.all(
+        items.map(async (item) => {
+          next[item.id] = {
+            status: "loading",
+            data: null,
+          };
+
+          try {
+            // IMPORTANT:
+            // Send the actual quantity requested.
+            const res = await getAvailability(
+              item.id,
+              item.quantity
+            );
+
+            if (cancelled) return;
+
+            const data = res.data;
+
+            next[item.id] = {
+              status: data.earliest_delivery_date
+                ? "ready"
+                : "unavailable",
+              data,
+            };
+          } catch (error) {
+            if (cancelled) return;
+
+            const status = error.response?.status;
+
+            if (status === 409) {
+              next[item.id] = {
+                status: "unavailable",
+                data: error.response?.data || null,
+              };
+            } else {
+              next[item.id] = {
+                status: "error",
+                data: null,
+              };
+            }
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setAvailabilityByProduct(next);
+    };
+
+    loadAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartAvailabilityKey]);
 
   useEffect(() => {
     getAddresses()
@@ -288,6 +366,35 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
       .catch(() => setAddresses([]));
   }, []);
 
+  const availabilityBlockedItems = items.filter((item) => {
+    const availability = availabilityByProduct[item.id];
+
+    return (
+      !availability ||
+      availability.status !== "ready" ||
+      !availability.data?.earliest_delivery_date
+    );
+  });
+
+  // Whole-cart earliest deliverable date: the LATEST of each item's
+  // earliest date, since every item must be deliverable on the chosen date.
+  const earliestCartDeliveryDate = Object.values(
+    availabilityByProduct
+  )
+    .map((a) => a.data?.earliest_delivery_date)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || "";
+
+  useEffect(() => {
+    if (
+      earliestCartDeliveryDate &&
+      (!date || date < earliestCartDeliveryDate)
+    ) {
+      setDate(earliestCartDeliveryDate);
+    }
+  }, [earliestCartDeliveryDate, date]);
+
   const selectedAddress = addresses.find((a) => a.id === Number(addressId));
   const deliveryFee = orderType === "delivery"
     ? deliveryFeeFor(selectedAddress?.address?.zip_code)
@@ -299,7 +406,25 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
     if (orderType === "delivery" && !addressId) {
       return toast.error("Please choose a delivery address.");
     }
+
+    if (availabilityBlockedItems.length > 0) {
+      return toast.error(
+        "Please resolve product availability before placing the order."
+      );
+    }
+
+    if (
+      date &&
+      earliestCartDeliveryDate &&
+      date < earliestCartDeliveryDate
+    ) {
+      return toast.error(
+        `The earliest available delivery date is ${earliestCartDeliveryDate}.`
+      );
+    }
+
     setPlacing(true);
+
     try {
       const res = await createOrder({
         items: items.map((i) => ({ product_id: i.id, quantity: i.quantity })),
@@ -363,40 +488,85 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
                 </p>
 
                 <div className="space-y-2">
-                  {items.map((i) => (
-                    <div key={i.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-gray-800">
-                        <span className="text-lg">{i.emoji || "🛒"}</span>
-                        {i.name}
-                      </span>
+                  {items.map((i) => {
+                    const availability = availabilityByProduct[i.id];
 
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 bg-brand-500 text-white rounded-full px-1.5 py-1">
-                          <button
-                            onClick={() => onUpdateQty(i.id, -1)}
-                            className="p-1 hover:bg-brand-600 rounded-full"
-                          >
-                            <FiMinus size={12} />
-                          </button>
-
-                          <span className="text-xs font-bold w-4 text-center">
-                            {i.quantity}
+                    return (
+                      <div
+                        key={i.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex flex-col min-w-0">
+                          <span className="flex items-center gap-2 text-gray-800">
+                            <span className="text-lg">{i.emoji || "🛒"}</span>
+                            <span className="truncate">{i.name}</span>
                           </span>
 
-                          <button
-                            onClick={() => onUpdateQty(i.id, 1)}
-                            className="p-1 hover:bg-brand-600 rounded-full"
-                          >
-                            <FiPlus size={12} />
-                          </button>
+                          {/* Availability status */}
+                          {availability?.status === "loading" && (
+                            <span className="text-xs text-gray-400 ml-7 mt-0.5">
+                              Checking availability…
+                            </span>
+                          )}
+
+                          {availability?.status === "ready" && (
+                            <span className="text-xs text-gray-500 ml-7 mt-0.5">
+                              {availability.data.in_stock_for_quantity ? (
+                                <>
+                                  Available for {i.quantity}
+                                </>
+                              ) : (
+                                <>
+                                  Only {availability.data.stock_quantity ?? 0} in stock
+                                </>
+                              )}
+
+                              {" · "}
+                              Earliest: {availability.data.earliest_delivery_date}
+                            </span>
+                          )}
+
+                          {availability?.status === "unavailable" && (
+                            <span className="text-xs text-red-500 ml-7 mt-0.5">
+                              Currently unavailable — no restock scheduled
+                            </span>
+                          )}
+
+                          {availability?.status === "error" && (
+                            <span className="text-xs text-red-500 ml-7 mt-0.5">
+                              Could not check availability
+                            </span>
+                          )}
                         </div>
 
-                        <span className="font-semibold text-gray-900">
-                          ${i.line_total.toFixed(2)}
-                        </span>
+                        <div className="flex items-center gap-3 ml-3">
+                          <div className="flex items-center gap-1 bg-brand-500 text-white rounded-full px-1.5 py-1">
+                            <button
+                              onClick={() => onUpdateQty(i.id, -1)}
+                              className="p-1 hover:bg-brand-600 rounded-full"
+                            >
+                              <FiMinus size={12} />
+                            </button>
+
+                            <span className="text-xs font-bold w-4 text-center">
+                              {i.quantity}
+                            </span>
+
+                            <button
+                              onClick={() => onUpdateQty(i.id, 1)}
+                              className="p-1 hover:bg-brand-600 rounded-full"
+                            >
+                              <FiPlus size={12} />
+                            </button>
+                          </div>
+
+                          <span className="font-semibold text-gray-900">
+                            ${i.line_total.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
           {/* Order type */}
@@ -462,7 +632,7 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
               <input
                 type="date"
                 className="input"
-                min={todayISO()}
+                min={earliestCartDeliveryDate || todayISO()}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
@@ -495,12 +665,17 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
           </div>
 
           <button
-            className="btn-primary w-full flex items-center justify-center gap-2"
-            onClick={placeOrder}
-            disabled={placing || (orderType === "delivery" && !addressId)}>
-            <FiShoppingCart size={15} />
-            {placing ? "Placing order…" : `Place order · $${total.toFixed(2)}`}
-          </button>
+              className="btn-primary w-full flex items-center justify-center gap-2"
+              onClick={placeOrder}
+              disabled={
+                placing ||
+                (orderType === "delivery" && !addressId) ||
+                availabilityBlockedItems.length > 0
+              }
+            >
+              <FiShoppingCart size={15} />
+              {placing ? "Placing order…" : `Place order · $${total.toFixed(2)}`}
+            </button>
         </div>
       </div>
     </div>
