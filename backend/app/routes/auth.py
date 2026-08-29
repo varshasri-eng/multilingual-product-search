@@ -124,7 +124,7 @@ def login():
             return jsonify({
                 "error": "Your staff request was not approved. Contact your administrator."
             }), 403
-        if customer.admin_role not in {"read", "write", "full"}:
+        if customer.admin_role not in {"read", "write", "full", "superadmin"}:
             return jsonify({
                 "error": "Account access is restricted."
             }), 403
