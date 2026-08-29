@@ -1,4 +1,4 @@
--- =============================================================
+﻿-- =============================================================
 -- Store2Home MVP Database Schema
 -- Local delivery of flowers, leaves & groceries
 -- Serving Lathrop and Mountain House, CA
@@ -82,8 +82,6 @@ CREATE TABLE products (
     price               NUMERIC(10,2) NOT NULL,
     discounted_price    NUMERIC(10,2),
     unit                VARCHAR(50),        -- "per bunch", "per piece", "100gm", "5ft"
-    taxable             BOOLEAN DEFAULT TRUE NOT NULL,
-    tax_percentage      NUMERIC(5,2) DEFAULT 9.00 NOT NULL,
 
     -- Details
     description         TEXT,
@@ -169,59 +167,9 @@ CREATE INDEX idx_addresses_customer ON addresses(customer_id);
 
 -- =============================================================
 -- SECTION 7: OTP / SESSIONS
--- Phone-or-email OTP login — no passwords.
---
--- NOTE: this consolidates what used to be two conflicting
--- definitions of otp_verifications in this file (an original
--- phone-only version here, and a second, newer `identifier`
--- (email-or-phone) version further down). Running both top-to-
--- bottom against a fresh DB meant this first CREATE TABLE always
--- won and the later CREATE TABLE IF NOT EXISTS silently no-op'd —
--- so `identifier` never actually got created on a from-scratch run,
--- even though newer auth code (password reset, email login) very
--- likely depends on it. This is now the single source of truth.
+-- Phone OTP login ΓÇö no passwords
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS otp_verifications (
-    id          SERIAL PRIMARY KEY,
-    identifier  VARCHAR(255) NOT NULL,   -- email or phone
-    otp_code    VARCHAR(10) NOT NULL,
-    is_used     BOOLEAN DEFAULT FALSE,
-    expires_at  TIMESTAMPTZ NOT NULL,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_otp_identifier ON otp_verifications(identifier);
-
--- Migration path for a DB created from the OLD phone-only version of
--- this table before this consolidation (adds `identifier`,
--- backfilling it from `phone` where present, without touching data).
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'otp_verifications' AND column_name = 'phone'
-    ) AND NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'otp_verifications' AND column_name = 'identifier'
-    ) THEN
-        ALTER TABLE otp_verifications ADD COLUMN identifier VARCHAR(255);
-        UPDATE otp_verifications SET identifier = phone WHERE identifier IS NULL;
-        ALTER TABLE otp_verifications ALTER COLUMN identifier SET NOT NULL;
-    END IF;
-END$$;
-
-CREATE TABLE IF NOT EXISTS sessions (
-    id              SERIAL PRIMARY KEY,
-    customer_id     INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    token           VARCHAR(255) NOT NULL UNIQUE,
-    is_active       BOOLEAN DEFAULT TRUE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    expires_at      TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_token      ON sessions(token);
-CREATE INDEX IF NOT EXISTS idx_sessions_customer   ON sessions(customer_id);
 
 -- =============================================================
 -- SECTION 8: ORDERS
@@ -268,7 +216,6 @@ CREATE TABLE order_items (
     quantity        INTEGER NOT NULL DEFAULT 1,
     unit_price      NUMERIC(10,2) NOT NULL,
     line_total      NUMERIC(10,2) NOT NULL,
-    delivery_date    DATE,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -276,77 +223,8 @@ CREATE INDEX idx_order_items_order   ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_id);
 
 -- =============================================================
--- SECTION 8.5: INVOICES (Phase 3)
--- Never previously in this file even though `Invoice`/`InvoiceItem`
--- SQLAlchemy models already existed and were used in production —
--- the tables were created purely via db.create_all(), with this SQL
--- file never updated to match. Added here now, WITH the Phase 3
--- payment-proof columns already included, so a fresh database gets
--- the full shape in one pass (no separate ALTER needed). For an
--- EXISTING database that already has `invoices` without these
--- columns, this CREATE TABLE IF NOT EXISTS is a no-op — see the
--- guarded ALTER TABLE block in Section 17 instead, which is what
--- actually adds the columns in that case.
---
--- invoice_items' columns are reconstructed from how admin.py
--- constructs InvoiceItem(...) and reads item.to_dict() — this file
--- never had the real invoice_item.py model to copy from directly, so
--- please diff this against your actual model before relying on it.
--- =============================================================
-
-CREATE TABLE IF NOT EXISTS invoices (
-    id                          SERIAL PRIMARY KEY,
-    invoice_number              VARCHAR(30) NOT NULL UNIQUE,
-    order_id                    INTEGER NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
-
-    subtotal                    NUMERIC(10,2) NOT NULL DEFAULT 0,
-    delivery_fee                NUMERIC(10,2) NOT NULL DEFAULT 0,
-    discount_amount              NUMERIC(10,2) NOT NULL DEFAULT 0,
-    tax_amount                  NUMERIC(10,2) NOT NULL DEFAULT 0,
-    total_amount                NUMERIC(10,2) NOT NULL DEFAULT 0,
-
-    -- issued -> payment_submitted -> payment_verified | payment_rejected
-    -- payment_rejected -> payment_submitted (customer resubmits)
-    status                      VARCHAR(20) NOT NULL DEFAULT 'issued',
-
-    issued_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    paid_at                     TIMESTAMPTZ,       -- set when admin verifies payment
-    processed_at                TIMESTAMPTZ,
-
-    -- Payment proof (Phase 3)
-    payment_screenshot_path     VARCHAR(500),
-    payment_note                TEXT,
-    payment_submitted_at        TIMESTAMPTZ,
-    payment_verified_by         INTEGER REFERENCES customers(id),
-    payment_rejection_reason    TEXT,
-
-    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_invoices_order ON invoices(order_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
-
-CREATE TABLE IF NOT EXISTS invoice_items (
-    id              SERIAL PRIMARY KEY,
-    invoice_id      INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    order_item_id   INTEGER REFERENCES order_items(id),
-    product_id      INTEGER REFERENCES products(id),
-    product_name    VARCHAR(255) NOT NULL,
-    quantity        INTEGER NOT NULL DEFAULT 1,
-    unit_price      NUMERIC(10,2) NOT NULL,
-    line_total      NUMERIC(10,2) NOT NULL,
-    taxable         BOOLEAN NOT NULL DEFAULT FALSE,
-    tax_percentage  NUMERIC(5,2) NOT NULL DEFAULT 0,
-    tax_amount      NUMERIC(10,2) NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id);
-
--- =============================================================
--- SECTION 9: PAYMENTS (legacy)
--- Cash and Zelle only (per original MVP spec). Appears unrelated to
--- the invoices/invoice_items flow actually used by admin.py today —
--- left as-is; not touched by the Phase 3 work.
+-- SECTION 9: PAYMENTS
+-- Cash and Zelle only (per MVP spec)
 -- =============================================================
 
 CREATE TABLE payments (
@@ -497,7 +375,7 @@ CREATE TABLE IF NOT EXISTS household_members (
 
 -- =============================================================
 -- SECTION 15: CUSTOMER ADDRESS LINKS
--- Junction table: many customers ↔ many addresses
+-- Junction table: many customers Γåö many addresses
 -- Two customers can share the same address_id (household)
 -- =============================================================
 
@@ -514,22 +392,34 @@ CREATE TABLE IF NOT EXISTS customer_address_links (
 CREATE INDEX IF NOT EXISTS idx_cal_customer ON customer_address_links(customer_id);
 CREATE INDEX IF NOT EXISTS idx_cal_address  ON customer_address_links(address_id);
 
-CREATE TABLE IF NOT EXISTS product_delivery_rules (
-    product_id              INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
-    restock_cycle           VARCHAR(20) NOT NULL DEFAULT 'none',
-    restock_day_of_week     INTEGER,
-    restock_day_of_month    INTEGER,
-    min_lead_days           INTEGER NOT NULL DEFAULT 0,
-    updated_at              TIMESTAMPTZ DEFAULT NOW()
+-- =============================================================
+-- SECTION 16: OTP VERIFICATIONS & SESSIONS (auth)
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS otp_verifications (
+    id          SERIAL PRIMARY KEY,
+    identifier  VARCHAR(255) NOT NULL,   -- email or phone
+    otp_code    VARCHAR(10) NOT NULL,
+    is_used     BOOLEAN DEFAULT FALSE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- =============================================================
--- SECTION 16: household_id ON customers
--- (OTP verifications / sessions consolidated up into Section 7 —
--- see the note there. This section now only carries the
--- customers.household_id addition.)
--- =============================================================
+CREATE INDEX IF NOT EXISTS idx_otp_identifier ON otp_verifications(identifier);
 
+CREATE TABLE IF NOT EXISTS sessions (
+    id          SERIAL PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    token       VARCHAR(255) NOT NULL UNIQUE,
+    is_active   BOOLEAN DEFAULT TRUE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token    ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_customer ON sessions(customer_id);
+
+-- add household_id column to customers if it doesn't exist
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -540,65 +430,4 @@ BEGIN
   END IF;
 END$$;
 
--- =============================================================
--- SECTION 17: PAYMENT SETTINGS + INVOICE PAYMENT PROOF (Phase 3)
--- =============================================================
--- Run this if you're not using `flask db migrate && flask db upgrade`.
--- Section 8.5 above already creates `invoices` WITH these columns on
--- a from-scratch database, so on a fresh DB this block is a no-op.
--- It's here for any database where `invoices` already existed BEFORE
--- these columns were added to the model — db.create_all() will never
--- retroactively add columns to an existing table, so this (or a real
--- Flask-Migrate migration) is required in that case.
 
-CREATE TABLE IF NOT EXISTS payment_settings (
-    id              SERIAL PRIMARY KEY,
-    qr_code_url     VARCHAR(500),
-    instructions    TEXT,
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'invoices' AND column_name = 'payment_screenshot_path'
-    ) THEN
-        ALTER TABLE invoices ADD COLUMN payment_screenshot_path VARCHAR(500);
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'invoices' AND column_name = 'payment_note'
-    ) THEN
-        ALTER TABLE invoices ADD COLUMN payment_note TEXT;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'invoices' AND column_name = 'payment_submitted_at'
-    ) THEN
-        ALTER TABLE invoices ADD COLUMN payment_submitted_at TIMESTAMPTZ;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'invoices' AND column_name = 'payment_verified_by'
-    ) THEN
-        ALTER TABLE invoices ADD COLUMN payment_verified_by INTEGER REFERENCES customers(id);
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'invoices' AND column_name = 'payment_rejection_reason'
-    ) THEN
-        ALTER TABLE invoices ADD COLUMN payment_rejection_reason TEXT;
-    END IF;
-END$$;
-
--- Sanity check on the status values Invoice.status can hold going
--- forward (issued | payment_submitted | payment_verified |
--- payment_rejected). No CHECK constraint added here since existing
--- status-like columns in this schema (e.g. orders.status) also rely
--- on application-level validation only, not DB constraints — kept
--- consistent with that.

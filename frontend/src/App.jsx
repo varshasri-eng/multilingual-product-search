@@ -32,6 +32,9 @@ import CustomerDetail  from "./pages/admin/CustomerDetail";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SearchInsights  from "./pages/admin/SearchInsights";
 import AdminBrandingPage from "./pages/admin/AdminBrandingPage";
+import PaymentSettingsPage from "./pages/admin/PaymentSettingsPage";
+import AdminOrders from "./pages/admin/AdminOrders";
+import DeliveryRules from "./pages/admin/DeliveryRules";
 
 // Layouts
 import CustomerLayout from "./components/CustomerLayout";
@@ -111,6 +114,9 @@ export default function App() {
           <Route path="staff"         element={<StaffManagement />} />
           <Route path="search"        element={<SearchInsights />} />
           <Route path="branding"      element={<AdminBrandingPage />} />
+          <Route path="payment-settings" element={<PaymentSettingsPage />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="delivery-rules" element={<DeliveryRules />} />
         </Route>
 
         {/* ── Defaults ────────────────────────────────── */}
