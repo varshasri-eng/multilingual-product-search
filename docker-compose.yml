@@ -1,20 +1,20 @@
 services:
 
   # ─────────────────────────────────────────────
-  # PostgreSQL — main database
+  # PostgreSQL — feature database
   # ─────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: store2home_postgres
+    container_name: s2h_order_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - s2h_order_pgdata:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -23,29 +23,11 @@ services:
       retries: 5
 
   # ─────────────────────────────────────────────
-  # pgAdmin — browser GUI at http://localhost:5051
-  # ─────────────────────────────────────────────
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: store2home_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
-    ports:
-      - "5051:80"
-    volumes:
-      - ./pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # ─────────────────────────────────────────────
-  # Flask — backend API at http://localhost:5000
+  # Flask — feature backend
   # ─────────────────────────────────────────────
   backend:
     build: ./backend
-    container_name: store2home_backend
+    container_name: s2h_order_backend
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -53,7 +35,7 @@ services:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       FLASK_APP: wsgi.py
     ports:
-      - "5001:5000"
+      - "5002:5000"
     volumes:
       - ./backend:/app
     depends_on:
@@ -62,18 +44,21 @@ services:
     command: python wsgi.py
 
   # ─────────────────────────────────────────────
-  # React — public portal at http://localhost:3000
+  # React — feature portal
   # ─────────────────────────────────────────────
   frontend:
-  build: ./frontend
-  container_name: store2home_frontend
-  restart: unless-stopped
-  environment:
-    VITE_API_URL: ${VITE_API_URL}
-  ports:
-    - "3000:3000"
-  volumes:
-    - ./frontend:/app
-    - /app/node_modules
-  depends_on:
-    - backend
+    build: ./frontend
+    container_name: s2h_order_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ""
+    ports:
+      - "4000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  s2h_order_pgdata:
