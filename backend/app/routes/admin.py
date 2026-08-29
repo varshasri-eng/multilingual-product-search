@@ -14,6 +14,8 @@ DELETE /api/admin/customers/<id>             - hard delete (use with caution)
 GET  /api/admin/stats/customers              - dashboard counts
 """
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models.customer import Customer
@@ -457,6 +459,77 @@ def update_order_invoice(customer, order_id):
         "message": "Invoice updated successfully.",
         "invoice": invoice.to_dict(),
     }), 200
+
+
+# ── VERIFY / REJECT PAYMENT (Phase 3) ─────────────────────────
+# Acts on a customer's payment-proof submission (see orders.py's
+# submit_payment_proof). Only valid from "payment_submitted" — an
+# admin can't verify/reject an invoice the customer hasn't actually
+# submitted proof for yet, and can't re-verify one already verified.
+@admin_bp.route("/orders/<int:order_id>/invoice/verify", methods=["PUT"])
+@admin_required
+def verify_order_payment(customer, order_id):
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    invoice = order.invoice
+    if not invoice:
+        return jsonify({"error": "This order does not have an invoice."}), 404
+
+    if invoice.status != "payment_submitted":
+        return jsonify({
+            "error": (
+                "There is no pending payment submission to verify "
+                f"(current status: {invoice.status})."
+            )
+        }), 400
+
+    invoice.status = "payment_verified"
+    invoice.paid_at = datetime.now(timezone.utc)
+    invoice.payment_verified_by = customer.id
+    invoice.payment_rejection_reason = None
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Payment verified.",
+        "invoice": invoice.to_dict(),
+    }), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/invoice/reject", methods=["PUT"])
+@admin_required
+def reject_order_payment(customer, order_id):
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    invoice = order.invoice
+    if not invoice:
+        return jsonify({"error": "This order does not have an invoice."}), 404
+
+    if invoice.status != "payment_submitted":
+        return jsonify({
+            "error": (
+                "There is no pending payment submission to reject "
+                f"(current status: {invoice.status})."
+            )
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip() or None
+
+    invoice.status = "payment_rejected"
+    invoice.payment_rejection_reason = reason
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Payment rejected.",
+        "invoice": invoice.to_dict(),
+    }), 200
+
 
 # ── REMOVE ORDER ITEM ─────────────────────────────────────────
 @admin_bp.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])

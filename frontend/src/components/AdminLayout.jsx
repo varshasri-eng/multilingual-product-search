@@ -10,7 +10,9 @@ import {
   FiShield,
   FiSearch,
   FiDroplet,
-  FiPackage
+  FiPackage,
+  FiTruck,
+  FiCreditCard,
 } from "react-icons/fi";
 import BrandLogo from "./BrandLogo";
 
@@ -66,6 +68,9 @@ export default function AdminLayout() {
           <NavLink to="/admin/orders" className={navClass}>
             <FiPackage /> Orders
           </NavLink>
+          <NavLink to="/admin/delivery-rules" className={navClass}>
+            <FiTruck /> Delivery Rules
+          </NavLink>
           <NavLink to="/admin/staff" className={navClass}>
             <FiShield /> Staff
           </NavLink>
@@ -74,6 +79,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/branding" className={navClass}>
             <FiDroplet /> Branding
+          </NavLink>
+          <NavLink to="/admin/payment-settings" className={navClass}>
+            <FiCreditCard /> Payment Settings
           </NavLink>
         </nav>
 

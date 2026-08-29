@@ -273,6 +273,11 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
   const [slot, setSlot] = useState("");
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(null);
+
+  // getAvailability() is passed orderType, and the backend computes
+  // earliest_delivery_date correctly per fulfillment type (pickup skips
+  // min_lead_days entirely). Re-fetches whenever orderType changes —
+  // see the effect below.
   const [availabilityByProduct, setAvailabilityByProduct] = useState({});
 
   const items = Object.entries(cart)
@@ -307,10 +312,14 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
 
           try {
             // IMPORTANT:
-            // Send the actual quantity requested.
+            // Send both the actual quantity requested AND the
+            // current orderType, so the backend computes
+            // earliest_delivery_date with the correct lead-time
+            // rule (pickup skips min_lead_days entirely).
             const res = await getAvailability(
               item.id,
-              item.quantity
+              item.quantity,
+              orderType
             );
 
             if (cancelled) return;
@@ -353,7 +362,7 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
     return () => {
       cancelled = true;
     };
-  }, [cartAvailabilityKey]);
+  }, [cartAvailabilityKey, orderType]);
 
   useEffect(() => {
     getAddresses()
@@ -376,8 +385,9 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
     );
   });
 
-  // Whole-cart earliest deliverable date: the LATEST of each item's
-  // earliest date, since every item must be deliverable on the chosen date.
+  // Whole-cart earliest deliverable/pickup-able date: the LATEST of
+  // each item's earliest date, since every item must be
+  // available on the chosen date.
   const earliestCartDeliveryDate = Object.values(
     availabilityByProduct
   )
@@ -386,6 +396,9 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
     .sort()
     .at(-1) || "";
 
+  // Whenever the cart's earliest date moves forward (new item added,
+  // or orderType switched and pickup/delivery dates differ), snap the
+  // selected date up to it if it's now earlier than what's achievable.
   useEffect(() => {
     if (
       earliestCartDeliveryDate &&
@@ -419,7 +432,7 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
       date < earliestCartDeliveryDate
     ) {
       return toast.error(
-        `The earliest available delivery date is ${earliestCartDeliveryDate}.`
+        `The earliest available date is ${earliestCartDeliveryDate}.`
       );
     }
 
@@ -511,7 +524,7 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
 
                           {availability?.status === "ready" && (
                             <span className="text-xs text-gray-500 ml-7 mt-0.5">
-                              {availability.data.in_stock_for_quantity ? (
+                              {availability.data.in_stock_for_quantity !== false ? (
                                 <>
                                   Available for {i.quantity}
                                 </>
@@ -522,7 +535,8 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
                               )}
 
                               {" · "}
-                              Earliest: {availability.data.earliest_delivery_date}
+                              {orderType === "pickup" ? "Earliest pickup: " : "Earliest: "}
+                              {availability.data.earliest_delivery_date}
                             </span>
                           )}
 
@@ -627,7 +641,8 @@ function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label flex items-center gap-1.5">
-                <FiCalendar size={13} className="text-gray-400" /> Delivery date
+                <FiCalendar size={13} className="text-gray-400" />
+                {orderType === "delivery" ? "Delivery date" : "Pickup date"}
               </label>
               <input
                 type="date"

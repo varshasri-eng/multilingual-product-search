@@ -13,13 +13,17 @@ of the lifecycle — removing/replacing an item on an existing order
 
 Delivery scheduling is PRODUCT-based, not order-based (see
 utils/delivery.py): each OrderItem gets its own delivery_date, computed
-from that product's own stock + ProductDeliveryRule. Availability is
-based on whether current stock actually COVERS the requested quantity
-for that product (aggregated across duplicate cart lines) — not just
-"is it non-zero":
+from that product's own stock + ProductDeliveryRule, AND from the
+order's order_type. Pickup orders skip the delivery lead time entirely
+(ready today if in stock, or as soon as restocked if not); delivery
+orders apply the configured min_lead_days on top of either case.
+Availability is based on whether current stock actually COVERS the
+requested quantity for that product (aggregated across duplicate cart
+lines) — not just "is it non-zero":
   - stock_quantity is None (untracked) or >= the requested quantity:
-    available now, earliest_date = today + min_lead_days, and stock
-    decrements normally (never below zero, see below).
+    available now, earliest_date = today (+ min_lead_days for
+    delivery), and stock decrements normally (never below zero, see
+    below).
   - stock_quantity is present but LESS than the requested quantity
     (including zero): this is a BACKORDER. It's only allowed if a
     restock rule exists to compute a future date from (restock_cycle
@@ -37,9 +41,11 @@ below — so a request that fails for any reason leaves
 Product.stock_quantity untouched.
 """
 
-from datetime import date
+import os
+from datetime import date, datetime, timezone
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
+from werkzeug.utils import secure_filename
 from app import db
 from app.models.order import Order, OrderItem
 from app.models.product import Product
@@ -49,6 +55,11 @@ from app.utils.auth import login_required
 from app.utils.delivery import get_earliest_delivery_date
 
 orders_bp = Blueprint("orders", __name__)
+
+# ── Payment proof upload ────────────────────────────────────
+PAYMENT_SCREENSHOT_SUBDIR = os.path.join("static", "uploads", "payment_screenshots")
+PAYMENT_SCREENSHOT_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "pdf"}
+PAYMENT_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 
 VALID_ORDER_TYPES = {"delivery", "pickup"}
 VALID_TIME_SLOTS = {"Morning 9-12", "Afternoon 12-4", "Evening 4-7"}
@@ -66,12 +77,18 @@ def _delivery_fee_for(zip_code):
     return DEFAULT_DELIVERY_FEE
 
 
-def _validate_and_price_items(raw_items):
+def _validate_and_price_items(raw_items, order_type="delivery"):
     """
     Validate cart entries, price them, and determine each product's
     per-item delivery_date — all WITHOUT touching Product.stock_quantity.
     Stock is reserved separately, by _reserve_stock(), only once every
     other order-level validation has also passed.
+
+    order_type ("delivery" or "pickup") is forwarded to
+    get_earliest_delivery_date() for every product in the cart, so
+    pickup orders correctly skip the delivery lead time (see
+    utils/delivery.py) instead of inheriting delivery's scheduling
+    rules.
 
     Availability is product-based (see the module docstring): a
     product where current stock covers the aggregated requested
@@ -148,6 +165,10 @@ def _validate_and_price_items(raw_items):
         restock_day_of_month = rule.restock_day_of_month if rule else None
         min_lead_days = rule.min_lead_days if rule else 0
 
+        # Pickup is available immediately when stock is sufficient.
+        if order_type == "pickup":
+            min_lead_days = 0
+
         # Validate the rule before using it.
         if restock_cycle not in {"weekly", "monthly", "none"}:
             return None, None, None, (
@@ -211,8 +232,13 @@ def _validate_and_price_items(raw_items):
         )
 
         earliest_date = get_earliest_delivery_date(
-            today, sufficient_stock, restock_cycle,
-            restock_day_of_week, restock_day_of_month, min_lead_days,
+            today,
+            sufficient_stock,
+            restock_cycle,
+            restock_day_of_week,
+            restock_day_of_month,
+            min_lead_days,
+            order_type,
         )
 
         if earliest_date is None:
@@ -360,7 +386,7 @@ def create_order(customer):
         return jsonify({"error": "order_type must be delivery or pickup."}), 400
 
     # ── validate + price cart items (does NOT touch stock yet) ──────
-    items, subtotal, stock_updates, err = _validate_and_price_items(raw_items)
+    items, subtotal, stock_updates, err = _validate_and_price_items(raw_items, order_type)
     if err:
         return err
 
@@ -504,7 +530,7 @@ def create_guest_order():
         return jsonify({"error": "order_type must be delivery or pickup."}), 400
 
     # ── validate + price cart items (does NOT touch stock yet) ──────
-    items, subtotal, stock_updates, err = _validate_and_price_items(raw_items)
+    items, subtotal, stock_updates, err = _validate_and_price_items(raw_items, order_type)
     if err:
         return err
 
@@ -611,3 +637,96 @@ def create_guest_order():
         "message": "Order placed successfully.",
         "order": order.to_dict(),
     }), 201
+
+# ── PAYMENT PROOF SUBMISSION ─────────────────────────────────
+# Customer-facing: after an admin has raised an invoice, the customer
+# scans the QR (see /api/payment-settings), pays manually, then
+# submits proof here — a screenshot and/or a note. This does NOT mark
+# the payment as verified; it only moves the invoice into
+# "payment_submitted" for an admin to review (see admin.py's
+# verify/reject endpoints).
+@orders_bp.route("/<int:order_id>/invoice/payment", methods=["POST"])
+@login_required
+def submit_payment_proof(customer, order_id):
+    order = Order.query.filter_by(
+        id=order_id, customer_id=customer.id
+    ).first()
+    if not order:
+        return jsonify({"error": "Order not found."}), 404
+
+    invoice = order.invoice
+    if not invoice:
+        return jsonify({
+            "error": "This order does not have an invoice yet."
+        }), 404
+
+    # Only "issued" (first submission) or "payment_rejected"
+    # (resubmission) can accept new proof. Already-submitted or
+    # already-verified invoices shouldn't be overwritten here.
+    if invoice.status not in {"issued", "payment_rejected"}:
+        return jsonify({
+            "error": (
+                "Payment proof has already been submitted for this "
+                "invoice."
+                if invoice.status == "payment_submitted"
+                else "This invoice has already been verified."
+            )
+        }), 400
+
+    note = (request.form.get("note") or "").strip()
+    file = request.files.get("screenshot")
+    has_file = bool(file and file.filename)
+
+    if not has_file and not note:
+        return jsonify({
+            "error": "Please upload a screenshot or add a note."
+        }), 400
+
+    screenshot_path = invoice.payment_screenshot_path
+
+    if has_file:
+        ext = (
+            file.filename.rsplit(".", 1)[-1].lower()
+            if "." in file.filename else ""
+        )
+        if ext not in PAYMENT_SCREENSHOT_EXTENSIONS:
+            return jsonify({
+                "error": (
+                    "Screenshot must be an image (png/jpg/jpeg/webp) "
+                    "or PDF."
+                )
+            }), 400
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > PAYMENT_SCREENSHOT_MAX_BYTES:
+            return jsonify({
+                "error": "Screenshot must be under 5MB."
+            }), 400
+
+        upload_dir = os.path.join(
+            current_app.root_path, PAYMENT_SCREENSHOT_SUBDIR
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        filename = secure_filename(
+            f"invoice_{invoice.id}_{timestamp}.{ext}"
+        )
+        file.save(os.path.join(upload_dir, filename))
+        screenshot_path = f"/static/uploads/payment_screenshots/{filename}"
+
+    invoice.payment_screenshot_path = screenshot_path
+    invoice.payment_note = note or invoice.payment_note
+    invoice.payment_submitted_at = datetime.now(timezone.utc)
+    invoice.status = "payment_submitted"
+    # Resubmission clears any prior rejection reason.
+    invoice.payment_rejection_reason = None
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Payment proof submitted. Awaiting admin verification.",
+        "invoice": invoice.to_dict(),
+    }), 200

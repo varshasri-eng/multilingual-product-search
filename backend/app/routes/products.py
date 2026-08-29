@@ -40,6 +40,8 @@ TERM_WEIGHT = {
 NAME_WEIGHT = 90
 FUZZY_THRESHOLD = 0.72
 
+VALID_ORDER_TYPES = {"delivery", "pickup"}
+
 
 def _similar(a: str, b: str) -> float:
     if not a or not b:
@@ -269,6 +271,16 @@ def product_availability(product_id):
             "error": "quantity must be a positive integer"
         }), 400
 
+    # order_type controls whether min_lead_days is applied on top of
+    # today/the restock date (see utils/delivery.py). Defaults to
+    # "delivery" for backward compatibility with any caller that
+    # doesn't pass it, matching the default used when placing orders.
+    order_type = request.args.get("order_type", "delivery")
+    if order_type not in VALID_ORDER_TYPES:
+        return jsonify({
+            "error": "order_type must be delivery or pickup"
+        }), 400
+
     rule = ProductDeliveryRule.query.get(product_id)
 
     if rule is None:
@@ -295,12 +307,14 @@ def product_availability(product_id):
         restock_cycle,
         restock_day_of_week,
         restock_day_of_month,
-        min_lead_days
+        min_lead_days,
+        order_type,
     )
 
     return jsonify({
         "product_id": product_id,
         "requested_quantity": requested_quantity,
+        "order_type": order_type,
 
         "in_stock": product.stock_quantity is not None
                      and product.stock_quantity > 0,

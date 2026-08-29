@@ -8,6 +8,9 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiX,
+  FiCheckCircle,
+  FiXCircle,
+  FiImage,
 } from "react-icons/fi";
 
 import {
@@ -16,8 +19,17 @@ import {
   replaceOrderItem,
   raiseOrderInvoice,
   updateOrderInvoice,
+  verifyOrderPayment,
+  rejectOrderPayment,
 } from "../../api/admin";
 import api from "../../api/client";
+
+const PAYMENT_STATUS_STYLE = {
+  issued:             { bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   label: "Awaiting payment" },
+  payment_submitted:  { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", label: "Awaiting verification" },
+  payment_verified:   { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200",  label: "Payment verified" },
+  payment_rejected:   { bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    label: "Payment rejected" },
+};
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -34,6 +46,12 @@ export default function AdminOrders() {
   const [replacing, setReplacing] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [savingInvoice, setSavingInvoice] = useState(false);
+
+  // Payment verify/reject
+  const [verifyingOrderId, setVerifyingOrderId] = useState(null);
+  const [rejectModal, setRejectModal] = useState(null); // { order }
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
 
   const loadOrders = async () => {
     try {
@@ -75,6 +93,51 @@ export default function AdminOrders() {
       toast.error(
         err.response?.data?.error || "Could not remove item."
       );
+    }
+  };
+
+  // ── PAYMENT VERIFY / REJECT ───────────────────────────────────
+  const handleVerifyPayment = async (order) => {
+    setVerifyingOrderId(order.id);
+    try {
+      await verifyOrderPayment(order.id);
+      toast.success("Payment verified.");
+      await loadOrders();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || "Could not verify payment."
+      );
+    } finally {
+      setVerifyingOrderId(null);
+    }
+  };
+
+  const openRejectModal = (order) => {
+    setRejectModal({ order });
+    setRejectReason("");
+  };
+
+  const closeRejectModal = () => {
+    if (rejecting) return;
+    setRejectModal(null);
+    setRejectReason("");
+  };
+
+  const handleRejectPayment = async () => {
+    if (!rejectModal) return;
+
+    setRejecting(true);
+    try {
+      await rejectOrderPayment(rejectModal.order.id, rejectReason.trim());
+      toast.success("Payment rejected.");
+      closeRejectModal();
+      await loadOrders();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || "Could not reject payment."
+      );
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -400,6 +463,9 @@ export default function AdminOrders() {
       <div className="space-y-4">
         {filteredOrders.map((order) => {
           const isExpanded = expanded[order.id];
+          const paymentStatus = order.invoice
+            ? PAYMENT_STATUS_STYLE[order.invoice.status] ?? PAYMENT_STATUS_STYLE.issued
+            : null;
 
           return (
             <div
@@ -425,7 +491,7 @@ export default function AdminOrders() {
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="font-bold text-gray-900">
                           {order.order_number}
                         </h2>
@@ -438,16 +504,10 @@ export default function AdminOrders() {
                           {order.status}
                         </span>
 
-                        {order.ready_to_ship === false && (
-                          <span
-                            className="px-2 py-0.5 rounded-full
-                                       bg-red-50 text-red-600
-                                       text-xs font-semibold"
-                            title="One or more items are no longer
-                                   fulfillable (deactivated, removed,
-                                   or a stock issue)."
-                          >
-                            Not ready to ship
+                        {paymentStatus && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border
+                                           ${paymentStatus.bg} ${paymentStatus.text} ${paymentStatus.border}`}>
+                            {paymentStatus.label}
                           </span>
                         )}
                       </div>
@@ -551,6 +611,68 @@ export default function AdminOrders() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Payment verification — only relevant once a
+                      customer has actually submitted proof. */}
+                  {order.invoice?.status === "payment_submitted" && (
+                    <div className="px-5 pb-5">
+                      <div className="border border-yellow-200 bg-yellow-50
+                                      rounded-xl p-4">
+                        <p className="text-sm font-semibold text-yellow-800 mb-2">
+                          Payment proof submitted
+                          {order.invoice.payment_submitted_at &&
+                            ` — ${new Date(order.invoice.payment_submitted_at).toLocaleString()}`}
+                        </p>
+
+                        {order.invoice.payment_screenshot_path ? (
+                          <a
+                            href={order.invoice.payment_screenshot_path}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold
+                                       text-blue-700 hover:underline mb-2"
+                          >
+                            <FiImage size={13} /> View screenshot
+                          </a>
+                        ) : (
+                          <p className="text-xs text-gray-500 mb-2">
+                            No screenshot uploaded.
+                          </p>
+                        )}
+
+                        {order.invoice.payment_note && (
+                          <p className="text-xs text-gray-700 bg-white
+                                        rounded-lg p-2 border border-yellow-100 mb-3">
+                            "{order.invoice.payment_note}"
+                          </p>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleVerifyPayment(order)}
+                            disabled={verifyingOrderId === order.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5
+                                       rounded-lg bg-green-600 text-white
+                                       text-xs font-semibold hover:bg-green-700
+                                       disabled:opacity-50"
+                          >
+                            <FiCheckCircle size={13} />
+                            {verifyingOrderId === order.id ? "Verifying…" : "Verify Payment"}
+                          </button>
+
+                          <button
+                            onClick={() => openRejectModal(order)}
+                            className="flex items-center gap-1.5 px-3 py-1.5
+                                       rounded-lg bg-red-50 text-red-600
+                                       text-xs font-semibold hover:bg-red-100"
+                          >
+                            <FiXCircle size={13} />
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Totals */}
                   <div className="bg-gray-50 border-t border-gray-100
@@ -1124,6 +1246,62 @@ export default function AdminOrders() {
 
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject payment modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 bg-black/40
+                        flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h2 className="font-bold text-gray-900">Reject Payment</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Order {rejectModal.order.order_number}
+                </p>
+              </div>
+              <button
+                onClick={closeRejectModal}
+                disabled={rejecting}
+                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <label className="text-sm font-semibold text-gray-700">
+                Reason (shown to the customer)
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Screenshot doesn't match the invoice amount"
+                className="mt-2 w-full border border-gray-200 rounded-xl px-3 py-2.5
+                           text-sm outline-none focus:ring-2 focus:ring-brand-100 h-24 resize-none"
+              />
+
+              <div className="flex justify-end gap-2 mt-5">
+                <button
+                  onClick={closeRejectModal}
+                  disabled={rejecting}
+                  className="px-4 py-2.5 rounded-xl text-sm font-medium
+                             text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectPayment}
+                  disabled={rejecting}
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white
+                             text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                >
+                  {rejecting ? "Rejecting..." : "Reject Payment"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

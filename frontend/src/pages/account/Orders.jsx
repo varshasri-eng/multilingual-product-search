@@ -3,7 +3,8 @@ import {
   FiShoppingBag, FiClock, FiTruck, FiCheckCircle, FiXCircle,
   FiMapPin, FiPackage,
 } from "react-icons/fi";
-import { getMyOrders } from "../../api/orders";
+import { getMyOrders, submitPaymentProof } from "../../api/orders";
+import { getPaymentSettings } from "../../api/settings";
 import toast from "react-hot-toast";
 
 const STATUS_STYLE = {
@@ -15,17 +16,33 @@ const STATUS_STYLE = {
   cancelled: { icon: <FiXCircle size={14} />,     bg: "bg-red-50",     text: "text-red-700",     border: "border-red-200",     label: "Cancelled" },
 };
 
+// Payment status pill shown next to the invoice, distinct from the
+// order fulfillment status above — these track the QR-payment
+// verification flow (Phase 3), not delivery/pickup progress.
+const PAYMENT_STATUS_STYLE = {
+  issued:             { bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   label: "Awaiting payment" },
+  payment_submitted:  { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", label: "Awaiting verification" },
+  payment_verified:   { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200",  label: "Payment verified" },
+  payment_rejected:   { bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    label: "Payment rejected" },
+};
+
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [paymentSettings, setPaymentSettings] = useState(null);
 
   useEffect(() => {
     getMyOrders()
       .then((res) => setOrders(res.data.orders || []))
       .catch(() => toast.error("Failed to load orders."))
       .finally(() => setLoading(false));
+
+    getPaymentSettings()
+      .then((res) => setPaymentSettings(res.data))
+      .catch(() => setPaymentSettings(null));
   }, []);
+
     const openInvoice = (order) => {
       if (!order.invoice) {
         toast.error("Invoice is not available for this order.");
@@ -42,6 +59,24 @@ export default function Orders() {
     const printInvoice = () => {
       window.print();
     };
+
+    // Called after a successful payment-proof submission — updates
+    // both the open modal and the underlying orders list so the
+    // status pill on the order card also reflects the new state
+    // without needing a full refetch.
+    const handlePaymentSubmitted = (orderId, updatedInvoice) => {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId ? { ...o, invoice: updatedInvoice } : o
+        )
+      );
+      setSelectedInvoice((prev) =>
+        prev && prev.id === orderId
+          ? { ...prev, invoice: updatedInvoice }
+          : prev
+      );
+    };
+
   if (loading) {
     return (
       <div className="max-w-2xl">
@@ -74,6 +109,9 @@ export default function Orders() {
         <div className="space-y-3">
           {orders.map((order) => {
             const s = STATUS_STYLE[order.status] ?? STATUS_STYLE.pending;
+            const paymentStatus = order.invoice
+              ? PAYMENT_STATUS_STYLE[order.invoice.status] ?? PAYMENT_STATUS_STYLE.issued
+              : null;
             return (
               <div key={order.id} className="card hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
@@ -133,6 +171,14 @@ export default function Orders() {
                         <p className="text-xs text-gray-400 mt-0.5">
                           {order.invoice.invoice_number}
                         </p>
+
+                        {paymentStatus && (
+                          <span className={`inline-flex items-center mt-1.5 text-xs font-medium
+                                           px-2 py-0.5 rounded-full border
+                                           ${paymentStatus.bg} ${paymentStatus.text} ${paymentStatus.border}`}>
+                            {paymentStatus.label}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-3">
@@ -140,10 +186,6 @@ export default function Orders() {
                           <p className="font-semibold text-gray-900">
                             ${Number(order.invoice.total_amount).toFixed(2)}
                           </p>
-
-                          <span className="text-xs text-green-700 font-medium">
-                            {order.invoice.status}
-                          </span>
                         </div>
 
                         <button
@@ -166,16 +208,23 @@ export default function Orders() {
       {selectedInvoice && (
       <InvoiceModal
         order={selectedInvoice}
+        paymentSettings={paymentSettings}
         onClose={closeInvoice}
         onPrint={printInvoice}
+        onPaymentSubmitted={handlePaymentSubmitted}
       />
     )}
     </div>
 
   );
 }
-function InvoiceModal({ order, onClose, onPrint }) {
+
+function InvoiceModal({ order, paymentSettings, onClose, onPrint, onPaymentSubmitted }) {
   const invoice = order.invoice;
+
+  const [screenshotFile, setScreenshotFile] = useState(null);
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const subtotal = Number(invoice?.subtotal ?? order.subtotal ?? 0);
   const deliveryFee = Number(
@@ -187,6 +236,37 @@ function InvoiceModal({ order, onClose, onPrint }) {
   const total = Number(
     invoice?.total_amount ?? order.total_amount ?? 0
   );
+
+  // Only "issued" (first payment) and "payment_rejected" (resubmit
+  // after rejection) show the QR + upload form — "payment_submitted"
+  // is read-only pending admin review, "payment_verified" is done.
+  const canSubmitPayment =
+    invoice && ["issued", "payment_rejected"].includes(invoice.status);
+
+  const handleSubmitPayment = async () => {
+    if (!screenshotFile && !note.trim()) {
+      toast.error("Please upload a screenshot or add a note.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await submitPaymentProof(order.id, {
+        file: screenshotFile,
+        note: note.trim(),
+      });
+      toast.success("Payment proof submitted. Awaiting admin verification.");
+      onPaymentSubmitted(order.id, res.data.invoice);
+      setScreenshotFile(null);
+      setNote("");
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || "Could not submit payment proof."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -200,7 +280,8 @@ function InvoiceModal({ order, onClose, onPrint }) {
         {/* Toolbar */}
         <div
           className="flex items-center justify-between px-6 py-4
-                     border-b border-gray-200 sticky top-0 bg-white z-10"
+                     border-b border-gray-200 sticky top-0 bg-white z-10
+                     print:hidden"
         >
           <div>
             <h2 className="font-bold text-gray-900">
@@ -230,6 +311,26 @@ function InvoiceModal({ order, onClose, onPrint }) {
             </button>
           </div>
         </div>
+
+        {/* Payment section — QR + proof submission/status. Kept
+            outside the printable invoice below so printing the
+            invoice doesn't also print the QR/upload UI. */}
+        {invoice && (
+          <div className="p-6 pb-0 print:hidden">
+            <PaymentSection
+              invoice={invoice}
+              paymentSettings={paymentSettings}
+              total={total}
+              canSubmitPayment={canSubmitPayment}
+              screenshotFile={screenshotFile}
+              setScreenshotFile={setScreenshotFile}
+              note={note}
+              setNote={setNote}
+              submitting={submitting}
+              onSubmit={handleSubmitPayment}
+            />
+          </div>
+        )}
 
         {/* Invoice */}
         <div
@@ -443,6 +544,150 @@ function InvoiceModal({ order, onClose, onPrint }) {
               <p>Grocery Order Invoice</p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Handles all four invoice payment states: issued (pay now), 
+// payment_submitted (read-only, awaiting admin), payment_verified
+// (done), payment_rejected (show reason, allow resubmit — same form
+// as "issued").
+function PaymentSection({
+  invoice,
+  paymentSettings,
+  total,
+  canSubmitPayment,
+  screenshotFile,
+  setScreenshotFile,
+  note,
+  setNote,
+  submitting,
+  onSubmit,
+}) {
+  if (invoice.status === "payment_verified") {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-2">
+        <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
+          <FiCheckCircle size={16} /> Payment verified
+        </p>
+        {invoice.paid_at && (
+          <p className="text-xs text-green-700 mt-1">
+            Verified on {new Date(invoice.paid_at).toLocaleString()}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (invoice.status === "payment_submitted") {
+    return (
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 mb-2">
+        <p className="text-sm font-semibold text-yellow-800">
+          Payment proof submitted
+        </p>
+        <p className="text-xs text-yellow-700 mt-1">
+          Awaiting admin verification
+          {invoice.payment_submitted_at &&
+            ` — submitted ${new Date(invoice.payment_submitted_at).toLocaleString()}`}
+          .
+        </p>
+        {invoice.payment_screenshot_path && (
+          <img
+            src={invoice.payment_screenshot_path}
+            alt="Submitted payment screenshot"
+            className="mt-3 max-h-48 rounded-lg border border-yellow-200"
+          />
+        )}
+        {invoice.payment_note && (
+          <p className="text-xs text-gray-600 mt-2 bg-white rounded-lg p-2 border border-yellow-100">
+            "{invoice.payment_note}"
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // "issued" or "payment_rejected" — QR + upload form
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-2">
+      {invoice.status === "payment_rejected" && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3">
+          <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
+            <FiXCircle size={15} /> Payment rejected
+          </p>
+          {invoice.payment_rejection_reason && (
+            <p className="text-xs text-red-600 mt-1">
+              {invoice.payment_rejection_reason}
+            </p>
+          )}
+          <p className="text-xs text-red-500 mt-1">
+            Please double-check your payment and resubmit below.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-5">
+        {/* QR */}
+        <div className="flex-shrink-0 text-center">
+          {paymentSettings?.qr_code_url ? (
+            <img
+              src={paymentSettings.qr_code_url}
+              alt="Payment QR code"
+              className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white p-2"
+            />
+          ) : (
+            <div className="w-36 h-36 rounded-lg border border-dashed border-gray-300
+                            bg-white flex items-center justify-center text-xs text-gray-400 p-2">
+              QR not configured yet
+            </div>
+          )}
+          <p className="text-xs text-gray-500 mt-2">Scan to pay</p>
+          <p className="text-sm font-bold text-gray-900">${total.toFixed(2)}</p>
+        </div>
+
+        {/* Instructions + upload form */}
+        <div className="flex-1 min-w-0">
+          {paymentSettings?.instructions && (
+            <p className="text-sm text-gray-700 mb-3">
+              {paymentSettings.instructions}
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mb-3">
+            Enter the amount yourself when paying — it isn't pre-filled.
+            After paying, upload a screenshot and/or leave a note below.
+          </p>
+
+          {canSubmitPayment && (
+            <div className="space-y-2">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,application/pdf"
+                onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
+                className="block w-full text-xs text-gray-600
+                           file:mr-3 file:py-1.5 file:px-3 file:rounded-lg
+                           file:border-0 file:text-xs file:font-semibold
+                           file:bg-brand-50 file:text-brand-700
+                           hover:file:bg-brand-100"
+              />
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional: transaction ID, or anything else the admin should know…"
+                className="w-full text-sm border border-gray-200 rounded-lg p-2 h-16 resize-none
+                           outline-none focus:ring-2 focus:ring-brand-100"
+              />
+              <button
+                onClick={onSubmit}
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm
+                           font-semibold hover:bg-brand-700 disabled:opacity-50"
+              >
+                {submitting ? "Submitting…" : "Submit Payment Proof"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

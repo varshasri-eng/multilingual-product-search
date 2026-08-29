@@ -52,6 +52,33 @@ export const raiseOrderInvoice = (orderId, data) =>
 export const updateOrderInvoice = (orderId, data) =>
   api.put(`/admin/orders/${orderId}/invoice`, data);
 
+// ── Payment verification (Phase 3) ────────────────────────────
+// Only valid when the invoice is currently "payment_submitted" —
+// see orders.js's submitPaymentProof for how it gets there.
+export const verifyOrderPayment = (orderId) =>
+  api.put(`/admin/orders/${orderId}/invoice/verify`);
+
+export const rejectOrderPayment = (orderId, reason) =>
+  api.put(`/admin/orders/${orderId}/invoice/reject`, { reason });
+
+// ── Payment settings (Phase 3) ────────────────────────────────
+// The QR code + instructions shown on every invoice. Separate from
+// site branding — admin-managed payment info, not a branding asset.
+// NOTE: registered as a single blueprint/prefix (/api/payment-settings)
+// just like settings_bp — GET is public (api/settings.js), PUT here
+// is admin-gated server-side via @admin_required on the same path.
+export const updatePaymentSettings = (data) =>
+  api.put("/payment-settings", data);
+
+// ── Delivery rules ──────────────────────────────────────────
+// Per-product restock cycle + minimum lead time, used by
+// /products/<id>/availability to compute earliest_delivery_date.
+export const getProductDeliveryRule = (productId) =>
+  api.get(`/admin/products/${productId}/delivery-rule`);
+
+export const updateProductDeliveryRule = (productId, data) =>
+  api.put(`/admin/products/${productId}/delivery-rule`, data);
+
 // ── Search insights ──────────────────────────────────────────
 export const getSearchLogs = (params = {}) =>
   api.get("/admin/search-logs", { params });
