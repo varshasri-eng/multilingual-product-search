@@ -11,6 +11,10 @@ import {
   FiCheckCircle,
   FiXCircle,
   FiImage,
+  FiPhone,
+  FiMail,
+  FiMessageCircle,
+  FiMapPin,
 } from "react-icons/fi";
 
 import {
@@ -36,6 +40,11 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
   const [search, setSearch] = useState("");
+  // "pending" = everything not yet payment_verified (the working set:
+  // needs an invoice raised, payment reviewed, items fixed, etc.).
+  // "verified" = payment_verified orders, kept out of the way once
+  // there's nothing left to action on the payment side.
+  const [tab, setTab] = useState("pending");
 
   const [replaceModal, setReplaceModal] = useState(null);
   const [productSearch, setProductSearch] = useState("");
@@ -375,7 +384,13 @@ export default function AdminOrders() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
+  const isVerified = (order) => order.invoice?.status === "payment_verified";
+
+  const tabOrders = orders.filter((order) =>
+    tab === "verified" ? isVerified(order) : !isVerified(order)
+  );
+
+  const filteredOrders = tabOrders.filter((order) => {
     const q = search.trim().toLowerCase();
 
     if (!q) return true;
@@ -383,6 +398,8 @@ export default function AdminOrders() {
     return (
       order.order_number?.toLowerCase().includes(q) ||
       order.customer_name?.toLowerCase().includes(q) ||
+      order.customer_phone?.toLowerCase().includes(q) ||
+      order.customer_email?.toLowerCase().includes(q) ||
       order.status?.toLowerCase().includes(q) ||
       order.items?.some((item) =>
         item.product_name?.toLowerCase().includes(q)
@@ -427,12 +444,35 @@ export default function AdminOrders() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search order number, customer, product..."
+            placeholder="Search order number, customer, phone, email, product..."
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200
                        rounded-xl text-sm outline-none
                        focus:ring-2 focus:ring-brand-100"
           />
         </div>
+      </div>
+
+      {/* Tabs — Pending needs action (invoice, payment review, item
+          fixes); Verified is done and kept out of the way. */}
+      <div className="flex gap-1 mb-5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
+        {[
+          { key: "pending",  label: "Pending",  count: orders.filter((o) => !isVerified(o)).length },
+          { key: "verified", label: "Verified", count: orders.filter(isVerified).length },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
+              ${tab === t.key
+                ? "bg-gray-900 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"}`}>
+            {t.label}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full
+              ${tab === t.key ? "bg-white/20" : "bg-gray-100 text-gray-500"}`}>
+              {t.count}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Loading */}
@@ -451,12 +491,15 @@ export default function AdminOrders() {
             size={40}
           />
           <p className="font-semibold text-gray-700">
-            No orders found
+            {tab === "verified" ? "No verified orders yet" : "No orders found"}
           </p>
           <p className="text-sm text-gray-400 mt-1">
-            Orders placed by customers will appear here.
+            {tab === "verified"
+              ? "Orders move here once their payment is verified."
+              : "Orders placed by customers will appear here."}
           </p>
         </div>
+
       )}
 
       {/* Orders */}
@@ -534,6 +577,93 @@ export default function AdminOrders() {
               {/* Expanded order */}
               {isExpanded && (
                 <div className="border-t border-gray-100">
+
+                  {/* Customer contact + fulfillment info */}
+                  <div className="p-5 pb-0">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {/* Contact */}
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                          Customer
+                        </p>
+                        <p className="font-semibold text-gray-900 mb-2">
+                          {order.customer_name || "Unknown customer"}
+                        </p>
+                        <div className="space-y-1.5 text-sm">
+                          {order.customer_phone && (
+                            <a
+                              href={`tel:${order.customer_phone}`}
+                              className="flex items-center gap-2 text-gray-600 hover:text-brand-600"
+                            >
+                              <FiPhone size={13} /> {order.customer_phone}
+                            </a>
+                          )}
+                          {order.customer_whatsapp && (
+                            <a
+                              href={`https://wa.me/${order.customer_whatsapp.replace(/[^\d]/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 text-gray-600 hover:text-green-600"
+                            >
+                              <FiMessageCircle size={13} /> {order.customer_whatsapp} (WhatsApp)
+                            </a>
+                          )}
+                          {order.customer_email && (
+                            <a
+                              href={`mailto:${order.customer_email}`}
+                              className="flex items-center gap-2 text-gray-600 hover:text-brand-600"
+                            >
+                              <FiMail size={13} /> {order.customer_email}
+                            </a>
+                          )}
+                          {!order.customer_phone && !order.customer_whatsapp && !order.customer_email && (
+                            <p className="text-xs text-gray-400">No contact info on file.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fulfillment */}
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                          {order.order_type === "pickup" ? "Pickup" : "Delivery Address"}
+                        </p>
+                        {order.order_type === "pickup" ? (
+                          <p className="text-sm text-gray-600">
+                            Customer will pick this order up — no address needed.
+                          </p>
+                        ) : order.delivery_address ? (
+                          <div className="flex items-start gap-2 text-sm text-gray-700">
+                            <FiMapPin size={13} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                            <div>
+                              <p>
+                                {order.delivery_address.address_line1}
+                                {order.delivery_address.address_line2 &&
+                                  `, ${order.delivery_address.address_line2}`}
+                              </p>
+                              <p>
+                                {order.delivery_address.city}, {order.delivery_address.state}{" "}
+                                {order.delivery_address.zip_code}
+                              </p>
+                              {order.delivery_address.delivery_notes && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Note: {order.delivery_address.delivery_notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">No address on file.</p>
+                        )}
+                        {(order.requested_date || order.requested_time_slot) && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            {order.requested_date && `Requested: ${order.requested_date}`}
+                            {order.requested_date && order.requested_time_slot && " · "}
+                            {order.requested_time_slot}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Items */}
                   <div className="p-5 space-y-3">

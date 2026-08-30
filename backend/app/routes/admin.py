@@ -71,6 +71,7 @@ def list_orders(customer):
 
     for order in orders:
         customer_obj = Customer.query.get(order.customer_id)
+        address_obj = Address.query.get(order.address_id) if order.address_id else None
 
         items = []
         ready_to_ship = True
@@ -114,6 +115,20 @@ def list_orders(customer):
             "order_number": order.order_number,
             "customer_id": order.customer_id,
             "customer_name": customer_obj.name if customer_obj else None,
+            "customer_phone": customer_obj.phone if customer_obj else None,
+            "customer_email": customer_obj.email if customer_obj else None,
+            "customer_whatsapp": customer_obj.whatsapp_number if customer_obj else None,
+            "delivery_address": (
+                {
+                    "address_line1": address_obj.address_line1,
+                    "address_line2": address_obj.address_line2,
+                    "city": address_obj.city,
+                    "state": address_obj.state,
+                    "zip_code": address_obj.zip_code,
+                    "delivery_notes": address_obj.delivery_notes,
+                }
+                if address_obj else None
+            ),
             "status": order.status,
             "subtotal": float(order.subtotal or 0),
             "delivery_fee": float(order.delivery_fee or 0),
