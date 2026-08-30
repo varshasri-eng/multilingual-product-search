@@ -40,11 +40,12 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
   const [search, setSearch] = useState("");
-  // "pending" = everything not yet payment_verified (the working set:
-  // needs an invoice raised, payment reviewed, items fixed, etc.).
-  // "verified" = payment_verified orders, kept out of the way once
-  // there's nothing left to action on the payment side.
-  const [tab, setTab] = useState("pending");
+  // Three states, driven entirely by existing data (no new fetch):
+  //   "needs_invoice" — order.invoice is null, nothing raised yet
+  //   "pending"       — invoice exists but isn't payment_verified yet
+  //                     (issued / payment_submitted / payment_rejected)
+  //   "verified"      — invoice.status === "payment_verified"
+  const [tab, setTab] = useState("needs_invoice");
 
   const [replaceModal, setReplaceModal] = useState(null);
   const [productSearch, setProductSearch] = useState("");
@@ -384,11 +385,15 @@ export default function AdminOrders() {
     }
   };
 
+  const needsInvoice = (order) => !order.invoice;
   const isVerified = (order) => order.invoice?.status === "payment_verified";
+  const isPendingPayment = (order) => order.invoice && !isVerified(order);
 
-  const tabOrders = orders.filter((order) =>
-    tab === "verified" ? isVerified(order) : !isVerified(order)
-  );
+  const tabOrders = orders.filter((order) => {
+    if (tab === "needs_invoice") return needsInvoice(order);
+    if (tab === "verified") return isVerified(order);
+    return isPendingPayment(order);
+  });
 
   const filteredOrders = tabOrders.filter((order) => {
     const q = search.trim().toLowerCase();
@@ -452,12 +457,14 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* Tabs — Pending needs action (invoice, payment review, item
-          fixes); Verified is done and kept out of the way. */}
+      {/* Tabs — Needs Invoice hasn't had one raised yet; Pending
+          Payment has an invoice but payment isn't verified yet
+          (issued / submitted / rejected); Verified is done. */}
       <div className="flex gap-1 mb-5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
         {[
-          { key: "pending",  label: "Pending",  count: orders.filter((o) => !isVerified(o)).length },
-          { key: "verified", label: "Verified", count: orders.filter(isVerified).length },
+          { key: "needs_invoice", label: "Needs Invoice",   count: orders.filter(needsInvoice).length },
+          { key: "pending",       label: "Pending Payment",  count: orders.filter(isPendingPayment).length },
+          { key: "verified",      label: "Verified",        count: orders.filter(isVerified).length },
         ].map((t) => (
           <button
             key={t.key}
@@ -491,11 +498,17 @@ export default function AdminOrders() {
             size={40}
           />
           <p className="font-semibold text-gray-700">
-            {tab === "verified" ? "No verified orders yet" : "No orders found"}
+            {tab === "verified"
+              ? "No verified orders yet"
+              : tab === "needs_invoice"
+              ? "No orders waiting on an invoice"
+              : "No orders found"}
           </p>
           <p className="text-sm text-gray-400 mt-1">
             {tab === "verified"
               ? "Orders move here once their payment is verified."
+              : tab === "needs_invoice"
+              ? "New orders without an invoice yet will show up here."
               : "Orders placed by customers will appear here."}
           </p>
         </div>
