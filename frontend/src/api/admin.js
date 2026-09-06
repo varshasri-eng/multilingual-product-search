@@ -70,6 +70,21 @@ export const rejectOrderPayment = (orderId, reason) =>
 export const updatePaymentSettings = (data) =>
   api.put("/payment-settings", data);
 
+// Uploads/replaces the QR image file itself. Always overwrites the
+// same underlying file on the backend — the returned settings.qr_code_url
+// carries a fresh cache-busting ?v= each time, so the new image shows
+// up immediately instead of a stale cached one.
+export const uploadPaymentQr = (file) => {
+  const formData = new FormData();
+  formData.append("qr", file);
+  return api.post("/payment-settings/qr", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const deletePaymentQr = () =>
+  api.delete("/payment-settings/qr");
+
 // ── Delivery rules ──────────────────────────────────────────
 // Per-product restock cycle + minimum lead time, used by
 // /products/<id>/availability to compute earliest_delivery_date.
