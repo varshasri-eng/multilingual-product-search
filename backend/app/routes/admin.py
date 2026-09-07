@@ -753,10 +753,14 @@ def replace_order_item(customer, order_id, item_id):
     }), 200
 
 # ── PRODUCT DELIVERY RULES ────────────────────────────────────
-# Admin-controlled per-product restock/availability rules. Stock
-# itself is untouched here — this only manages when a product is
-# *expected* to become available again once it's out of stock (see
-# utils/delivery.py for how these feed into the availability calc).
+# Admin-controlled per-product restock/availability rules, plus the
+# product's current stock quantity. The delivery-rule fields control
+# when a product is *expected* to become available again once it's
+# out of stock (see utils/delivery.py for how these feed into the
+# availability calc); stock_quantity here writes straight to the same
+# products.stock_quantity column that order placement/cancellation/
+# replacement already read and write in orders.py, so this page is
+# just another writer of that existing field.
 @admin_bp.route("/products/<int:product_id>/delivery-rule", methods=["GET"])
 @admin_required
 def get_delivery_rule(customer, product_id):
@@ -771,6 +775,7 @@ def get_delivery_rule(customer, product_id):
         # availability endpoint already falls back to.
         return jsonify({
             "product_id": product_id,
+            "stock_quantity": product.stock_quantity,
             "restock_cycle": "none",
             "restock_day_of_week": None,
             "restock_day_of_month": None,
@@ -778,25 +783,32 @@ def get_delivery_rule(customer, product_id):
             "updated_at": None,
         }), 200
 
-    return jsonify(rule.to_dict()), 200
+    payload = rule.to_dict()
+    payload["stock_quantity"] = product.stock_quantity
+    return jsonify(payload), 200
 
 
 @admin_bp.route("/products/<int:product_id>/delivery-rule", methods=["PUT"])
 @admin_required
 def update_delivery_rule(customer, product_id):
     """
-    Create or update a product's delivery/restock rule.
+    Create or update a product's delivery/restock rule, and optionally
+    the product's current stock quantity in the same transaction.
 
         {
             "restock_cycle": "weekly",       // weekly | monthly | none
             "restock_day_of_week": 3,        // 0=Sun..6=Sat, weekly only
             "restock_day_of_month": null,    // 1-31, monthly only
-            "min_lead_days": 3
+            "min_lead_days": 3,
+            "stock_quantity": 25             // optional — absolute value, not a delta
         }
 
     The irrelevant day field for the chosen cycle is cleared, not just
     ignored, so a stale value can't silently linger and get picked up
     later if restock_cycle changes back.
+
+    stock_quantity is optional: if omitted, only the rule fields are
+    saved, so a rule-only edit can't accidentally zero out stock.
     """
     product = Product.query.get(product_id)
     if not product:
@@ -804,6 +816,21 @@ def update_delivery_rule(customer, product_id):
 
     data = request.get_json(silent=True) or {}
 
+    # ── Stock quantity validation (validate before mutating anything) ──
+    stock_quantity = data.get("stock_quantity", None)
+    if stock_quantity is not None:
+        try:
+            stock_quantity = int(stock_quantity)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "stock_quantity must be an integer."
+            }), 400
+        if stock_quantity < 0:
+            return jsonify({
+                "error": "stock_quantity must be 0 or greater."
+            }), 400
+
+    # ── Delivery-rule validation ──────────────────────────────
     restock_cycle = data.get("restock_cycle", "none")
     if restock_cycle not in VALID_RESTOCK_CYCLES:
         return jsonify({
@@ -859,21 +886,32 @@ def update_delivery_rule(customer, product_id):
     if min_lead_days < 0:
         return jsonify({"error": "min_lead_days must be a non-negative integer."}), 400
 
-    rule = ProductDeliveryRule.query.get(product_id)
-    if not rule:
-        rule = ProductDeliveryRule(product_id=product_id)
-        db.session.add(rule)
+    # ── All validated — now stage both mutations in one transaction ──
+    try:
+        rule = ProductDeliveryRule.query.get(product_id)
+        if not rule:
+            rule = ProductDeliveryRule(product_id=product_id)
+            db.session.add(rule)
 
-    rule.restock_cycle = restock_cycle
-    rule.restock_day_of_week = restock_day_of_week
-    rule.restock_day_of_month = restock_day_of_month
-    rule.min_lead_days = min_lead_days
+        rule.restock_cycle = restock_cycle
+        rule.restock_day_of_week = restock_day_of_week
+        rule.restock_day_of_month = restock_day_of_month
+        rule.min_lead_days = min_lead_days
 
-    db.session.commit()
+        if stock_quantity is not None:
+            product.stock_quantity = stock_quantity
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Could not save changes. Nothing was updated."}), 500
+
+    response = rule.to_dict()
+    response["stock_quantity"] = product.stock_quantity
 
     return jsonify({
         "message": "Delivery rule updated.",
-        "rule": rule.to_dict(),
+        "rule": response,
     }), 200
 
 

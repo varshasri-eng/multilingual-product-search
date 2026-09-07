@@ -32,6 +32,9 @@ export default function DeliveryRules() {
   const [minLeadDays, setMinLeadDays] = useState(0);
   const [updatedAt, setUpdatedAt] = useState(null);
 
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [stockError, setStockError] = useState("");
+
   useEffect(() => {
     getProducts()
       .then((res) => setProducts(res.data.products || []))
@@ -57,6 +60,10 @@ export default function DeliveryRules() {
         );
         setMinLeadDays(rule.min_lead_days ?? 0);
         setUpdatedAt(rule.updated_at || null);
+        setStockQuantity(
+          rule.stock_quantity != null ? String(rule.stock_quantity) : ""
+        );
+        setStockError("");
       })
       .catch(() => toast.error("Could not load delivery rule."))
       .finally(() => setLoadingRule(false));
@@ -67,10 +74,34 @@ export default function DeliveryRules() {
     if (id) loadRule(id);
   };
 
+  const handleStockChange = (val) => {
+    setStockQuantity(val);
+    if (val === "") {
+      setStockError("");
+      return;
+    }
+    const n = Number(val);
+    if (!Number.isInteger(n) || n < 0) {
+      setStockError("Stock must be a whole number, 0 or greater.");
+    } else {
+      setStockError("");
+    }
+  };
+
   const handleSave = async () => {
     if (!selectedProductId) {
       toast.error("Please select a product first.");
       return;
+    }
+
+    let stockPayloadValue;
+    if (stockQuantity !== "") {
+      const n = Number(stockQuantity);
+      if (!Number.isInteger(n) || n < 0) {
+        toast.error("Stock quantity must be a whole number, 0 or greater.");
+        return;
+      }
+      stockPayloadValue = n;
     }
 
     const payload = {
@@ -80,12 +111,26 @@ export default function DeliveryRules() {
         restockCycle === "weekly" ? Number(restockDayOfWeek) : null,
       restock_day_of_month:
         restockCycle === "monthly" ? Number(restockDayOfMonth) : null,
+      ...(stockPayloadValue !== undefined && { stock_quantity: stockPayloadValue }),
     };
 
     setSaving(true);
     try {
       const res = await updateProductDeliveryRule(selectedProductId, payload);
       setUpdatedAt(res.data.rule?.updated_at || null);
+
+      // keep the product list's displayed stock in sync without a refetch
+      if (res.data.rule?.stock_quantity != null) {
+        setStockQuantity(String(res.data.rule.stock_quantity));
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === Number(selectedProductId)
+              ? { ...p, stock_quantity: res.data.rule.stock_quantity }
+              : p
+          )
+        );
+      }
+
       toast.success("Delivery rule saved.");
     } catch (err) {
       toast.error(
@@ -150,12 +195,37 @@ export default function DeliveryRules() {
         )}
 
         {selectedProduct && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
-            <FiPackage size={14} />
-            Stock:{" "}
-            <span className="font-semibold text-gray-800">
-              {selectedProduct.stock_quantity ?? "Untracked"}
-            </span>
+          <div className="mt-3">
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-1.5">
+              <FiPackage size={14} />
+              Stock:{" "}
+              <span className="font-semibold text-gray-800">
+                {selectedProduct.stock_quantity ?? "Untracked"}
+              </span>
+            </div>
+
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+              Stock quantity
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={stockQuantity}
+              onChange={(e) => handleStockChange(e.target.value)}
+              className={`w-full px-3 py-2.5 border rounded-xl text-sm outline-none
+                          focus:ring-2 focus:ring-brand-100 ${
+                            stockError ? "border-red-300" : "border-gray-200"
+                          }`}
+              placeholder="Enter current stock"
+            />
+            {stockError && (
+              <p className="text-xs text-red-500 mt-1">{stockError}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">
+              This is the absolute current stock — entering a value replaces
+              the existing quantity, it does not add to it.
+            </p>
           </div>
         )}
       </div>
