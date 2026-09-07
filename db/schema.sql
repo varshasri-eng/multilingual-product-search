@@ -84,6 +84,7 @@ CREATE TABLE products (
     unit                VARCHAR(50),        -- "per bunch", "per piece", "100gm", "5ft"
     taxable             BOOLEAN DEFAULT TRUE NOT NULL,
     tax_percentage      NUMERIC(5,2) DEFAULT 9.00 NOT NULL,
+    stock_quantity      INTEGER DEFAULT 0,
 
     -- Details
     description         TEXT,
@@ -136,6 +137,9 @@ CREATE TABLE customers (
     role                VARCHAR(20) DEFAULT 'customer', -- customer|admin
     is_verified         BOOLEAN DEFAULT FALSE,
     is_active           BOOLEAN DEFAULT TRUE,
+    password_hash       VARCHAR(255),
+    admin_role          VARCHAR(20),
+    admin_request_note  TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
