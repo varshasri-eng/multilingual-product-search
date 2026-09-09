@@ -5,6 +5,7 @@ import {
 } from "react-icons/fi";
 import { getMyOrders, submitPaymentProof } from "../../api/orders";
 import { getPaymentSettings } from "../../api/settings";
+import { resolveMediaUrl } from "../../utils/media";
 import toast from "react-hot-toast";
 
 const STATUS_STYLE = {
@@ -595,9 +596,10 @@ function PaymentSection({
         </p>
         {invoice.payment_screenshot_path && (
           <img
-            src={invoice.payment_screenshot_path}
+            src={resolveMediaUrl(invoice.payment_screenshot_path)}
             alt="Submitted payment screenshot"
             className="mt-3 max-h-48 rounded-lg border border-yellow-200"
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
         {invoice.payment_note && (
@@ -633,9 +635,10 @@ function PaymentSection({
         <div className="flex-shrink-0 text-center">
           {paymentSettings?.qr_code_url ? (
             <img
-              src={paymentSettings.qr_code_url}
+              src={resolveMediaUrl(paymentSettings.qr_code_url)}
               alt="Payment QR code"
               className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white p-2"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
           ) : (
             <div className="w-36 h-36 rounded-lg border border-dashed border-gray-300

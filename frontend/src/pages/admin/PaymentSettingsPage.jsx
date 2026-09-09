@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FiSave, FiUpload, FiTrash2, FiChevronDown } from "react-icons/fi";
 import { getPaymentSettings } from "../../api/settings";
+import { resolveMediaUrl } from "../../utils/media";
 import {
   updatePaymentSettings,
   uploadPaymentQr,
@@ -124,9 +125,10 @@ export default function PaymentSettingsPage() {
               <div className="flex items-start gap-5">
                 {qrCodeUrl ? (
                   <img
-                    src={qrCodeUrl}
+                    src={resolveMediaUrl(qrCodeUrl)}
                     alt="Payment QR code"
                     className="w-32 h-32 object-contain rounded-xl border border-gray-200 bg-gray-50 p-2 flex-shrink-0"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
                   />
                 ) : (
                   <div className="w-32 h-32 rounded-xl border border-dashed border-gray-300

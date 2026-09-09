@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -34,17 +34,34 @@ export default function ShopPage() {
     localStorage.setItem("s2h_guest_cart", JSON.stringify(cart));
   }, [cart]);
 
+  // Debounced multilingual server search. Enter also force-triggers an
+  // immediate search (see handleSearchKeyDown below) — without it,
+  // Enter did nothing at all (no <form>, no submit), so typing fast
+  // and hitting Enter could look like "nothing happened" while the
+  // 250ms debounce (plus network latency) was still catching up.
   const [searchResults, setSearchResults] = useState(null);
+  const searchTimeoutRef = useRef(null);
+
+  const runSearch = (q) => {
+    if (!q) { setSearchResults(null); return; }
+    getProducts({ search: q })
+      .then((r) => setSearchResults(r.data.products))
+      .catch(() => setSearchResults([]));
+  };
+
   useEffect(() => {
     const q = search.trim();
     if (!q) { setSearchResults(null); return; }
-    const t = setTimeout(() => {
-      getProducts({ search: q })
-        .then((r) => setSearchResults(r.data.products))
-        .catch(() => setSearchResults([]));
-    }, 250);
-    return () => clearTimeout(t);
+    searchTimeoutRef.current = setTimeout(() => runSearch(q), 250);
+    return () => clearTimeout(searchTimeoutRef.current);
   }, [search]);
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(searchTimeoutRef.current);
+    runSearch(search.trim());
+  };
 
   const catNames = useMemo(
     () => ["All", ...categories.map((c) => c.name)],
@@ -112,6 +129,7 @@ export default function ShopPage() {
             placeholder="Search in English, Telugu, Hindi or Tamil…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
           />
           {search && (
             <button

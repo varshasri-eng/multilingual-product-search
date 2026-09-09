@@ -27,6 +27,7 @@ import {
   rejectOrderPayment,
 } from "../../api/admin";
 import api from "../../api/client";
+import { resolveMediaUrl } from "../../utils/media";
 
 const PAYMENT_STATUS_STYLE = {
   issued:             { bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   label: "Awaiting payment" },
@@ -769,7 +770,7 @@ export default function AdminOrders() {
 
                         {order.invoice.payment_screenshot_path ? (
                           <a
-                            href={order.invoice.payment_screenshot_path}
+                            href={resolveMediaUrl(order.invoice.payment_screenshot_path)}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 text-xs font-semibold

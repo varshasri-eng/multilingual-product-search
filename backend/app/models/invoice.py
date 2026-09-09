@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-from flask import request
 from app import db
 
 VALID_INVOICE_STATUSES = {
@@ -155,14 +154,16 @@ class Invoice(db.Model):
             "issued_at": self.issued_at.isoformat() if self.issued_at else None,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "processed_at": self.processed_at.isoformat() if self.processed_at else None,
-            # Absolute URL, computed at response time — the DB only
-            # stores the relative path (portable across environments/
-            # deployments); the frontend has no reliable way to know
-            # the API origin otherwise, so build it here.
-            "payment_screenshot_path": (
-                request.host_url.rstrip("/") + self.payment_screenshot_path
-                if self.payment_screenshot_path else None
-            ),
+            # Relative path only — was previously built into an
+            # absolute URL here using request.host_url, but that
+            # guesses the origin from the incoming request, which
+            # breaks the moment frontend/backend are on different
+            # hosts/ports (or behind a proxy) and the request's Host
+            # header doesn't match what the browser needs. The
+            # frontend now resolves this against the same API origin
+            # it already uses for every other call — see
+            # frontend/src/utils/media.js (resolveMediaUrl).
+            "payment_screenshot_path": self.payment_screenshot_path,
             "payment_note": self.payment_note,
             "payment_submitted_at": (
                 self.payment_submitted_at.isoformat()
