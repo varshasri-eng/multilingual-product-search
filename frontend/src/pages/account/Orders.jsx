@@ -567,6 +567,26 @@ function PaymentSection({
   submitting,
   onSubmit,
 }) {
+  const [qrLoadFailed, setQrLoadFailed] = useState(false);
+  const [screenshotLoadFailed, setScreenshotLoadFailed] = useState(false);
+  const resolvedQrUrl = paymentSettings?.qr_code_url
+    ? resolveMediaUrl(paymentSettings.qr_code_url)
+    : null;
+  const resolvedScreenshotUrl = invoice.payment_screenshot_path
+    ? resolveMediaUrl(invoice.payment_screenshot_path)
+    : null;
+
+  // Reset failure flags if the underlying URLs change (e.g. admin
+  // replaced the QR, or the customer resubmitted a new screenshot)
+  // so a stale failure doesn't stick around.
+  useEffect(() => {
+    setQrLoadFailed(false);
+  }, [paymentSettings?.qr_code_url]);
+
+  useEffect(() => {
+    setScreenshotLoadFailed(false);
+  }, [invoice.payment_screenshot_path]);
+
   if (invoice.status === "payment_verified") {
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-2">
@@ -594,13 +614,18 @@ function PaymentSection({
             ` — submitted ${new Date(invoice.payment_submitted_at).toLocaleString()}`}
           .
         </p>
-        {invoice.payment_screenshot_path && (
+        {resolvedScreenshotUrl && !screenshotLoadFailed && (
           <img
-            src={resolveMediaUrl(invoice.payment_screenshot_path)}
+            src={resolvedScreenshotUrl}
             alt="Submitted payment screenshot"
             className="mt-3 max-h-48 rounded-lg border border-yellow-200"
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
+            onError={() => setScreenshotLoadFailed(true)}
           />
+        )}
+        {resolvedScreenshotUrl && screenshotLoadFailed && (
+          <p className="mt-3 text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg p-2 break-all">
+            Screenshot failed to load: {resolvedScreenshotUrl}
+          </p>
         )}
         {invoice.payment_note && (
           <p className="text-xs text-gray-600 mt-2 bg-white rounded-lg p-2 border border-yellow-100">
@@ -633,17 +658,27 @@ function PaymentSection({
       <div className="flex flex-col sm:flex-row gap-5">
         {/* QR */}
         <div className="flex-shrink-0 text-center">
-          {paymentSettings?.qr_code_url ? (
+          {resolvedQrUrl && !qrLoadFailed ? (
             <img
-              src={resolveMediaUrl(paymentSettings.qr_code_url)}
+              src={resolvedQrUrl}
               alt="Payment QR code"
               className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white p-2"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
+              onError={() => setQrLoadFailed(true)}
             />
           ) : (
-            <div className="w-36 h-36 rounded-lg border border-dashed border-gray-300
-                            bg-white flex items-center justify-center text-xs text-gray-400 p-2">
-              QR not configured yet
+            <div className={`w-36 h-36 rounded-lg border border-dashed p-2 flex flex-col
+                            items-center justify-center text-xs text-center
+                            ${resolvedQrUrl ? "border-red-300 bg-red-50 text-red-500" : "border-gray-300 bg-white text-gray-400"}`}>
+              {resolvedQrUrl ? (
+                <>
+                  <span className="font-semibold">QR failed to load</span>
+                  <span className="mt-1 break-all leading-tight opacity-75">
+                    {resolvedQrUrl}
+                  </span>
+                </>
+              ) : (
+                "QR not configured yet"
+              )}
             </div>
           )}
           <p className="text-xs text-gray-500 mt-2">Scan to pay</p>
