@@ -14,6 +14,7 @@ import {
 import { createOrder } from "../../api/orders";
 import { getAddresses } from "../../api/customers";
 import { useAuth } from "../../context/AuthContext";
+import { useBranding } from "../../context/BrandingContext";
 
 const TIME_SLOTS = ["Morning 9-12", "Afternoon 12-4", "Evening 4-7"];
 
@@ -37,6 +38,7 @@ const LOW_STOCK_THRESHOLD = 5;
 
 export default function Home() {
   const navigate = useNavigate();
+  const { settings } = useBranding();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,6 +124,37 @@ export default function Home() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Banner — same settings.hero_banner_url as the guest shop/
+          landing pages, so setting it once in Admin → Branding
+          applies everywhere. Rounded card here rather than edge-to-
+          edge, since this page lives inside CustomerLayout's padded
+          content area, not full-bleed like the guest pages. */}
+      {settings.hero_banner_url && (
+        <div className="relative rounded-2xl overflow-hidden mb-6">
+          <img
+            src={settings.hero_banner_url}
+            alt=""
+            className="w-full h-40 sm:h-56 object-cover"
+            onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }}
+          />
+          {(settings.hero_title || settings.hero_subtitle) && (
+            <div className="absolute inset-0 bg-black/30 flex flex-col items-center
+                            justify-center text-center px-4">
+              {settings.hero_title && (
+                <h2 className="text-xl sm:text-2xl font-bold text-white drop-shadow-sm">
+                  {settings.hero_title}
+                </h2>
+              )}
+              {settings.hero_subtitle && (
+                <p className="text-sm text-white/90 mt-1.5 max-w-md drop-shadow-sm">
+                  {settings.hero_subtitle}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
