@@ -15,7 +15,8 @@ from app.utils.seed import CATALOG, PRODUCTS, SEARCH_TERMS
 
 PRODUCT_EXTRA_COLUMNS = {
     "emoji": "VARCHAR(20) DEFAULT '🛒'",
-    "diet":  "VARCHAR(20) DEFAULT 'veg'",
+    "diet": "VARCHAR(20) DEFAULT 'veg'",
+    "stock_quantity": "INTEGER DEFAULT 0",
 }
 
 

@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useBranding } from "../context/BrandingContext";
 import { logout } from "../api/auth";
@@ -6,10 +6,11 @@ import toast from "react-hot-toast";
 import {
   FiUser, FiMapPin, FiLogOut, FiHome,
   FiShoppingBag, FiUsers, FiBell, FiSettings,
-  FiChevronRight, FiChevronLeft,
+  FiChevronRight, FiChevronLeft, FiShoppingCart,
 } from "react-icons/fi";
 import { useState } from "react";
 import BrandLogo from "./BrandLogo";
+import Footer from "./Footer";
 
 const NAV_ITEMS = [
   {
@@ -161,10 +162,38 @@ export default function CustomerLayout() {
         </button>
       </aside>
 
-      {/* ── Main content ─────────────────────────────────── */}
-      <main className="flex-1 p-8 overflow-y-auto min-h-screen">
-        <Outlet />
-      </main>
+      {/* ── Main column: slim top bar + content + footer ─── */}
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* Slim top bar — sidebar already handles account navigation,
+            so this stays minimal: quick way back to the shop, and a
+            notifications shortcut, rather than duplicating the
+            sidebar's own links. */}
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100">
+          <div className="flex items-center justify-end gap-2 px-8 h-14">
+            <Link
+              to="/shop"
+              className="flex items-center gap-1.5 text-sm font-medium text-gray-500
+                         hover:text-gray-900 transition-colors px-3 py-1.5 rounded-lg
+                         hover:bg-gray-50">
+              <FiShoppingCart size={14} />
+              Shop
+            </Link>
+            <Link
+              to="/account/notifications"
+              className="text-gray-400 hover:text-gray-700 transition-colors p-2 rounded-lg
+                         hover:bg-gray-50"
+              aria-label="Notifications">
+              <FiBell size={16} />
+            </Link>
+          </div>
+        </header>
+
+        <main className="flex-1 p-8 overflow-y-auto">
+          <Outlet />
+        </main>
+
+        <Footer />
+      </div>
     </div>
   );
 }

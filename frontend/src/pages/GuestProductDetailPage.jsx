@@ -8,8 +8,6 @@ import {
 import {
   getProduct, getRelated, getRecentlyViewed, getSessionId, getAvailability,
 } from "../api/products";
-import { useBranding } from "../context/BrandingContext";
-import BrandLogo from "../components/BrandLogo";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -23,7 +21,7 @@ function ProductCard({ p, onClick }) {
       onClick={onClick}
       className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col
                  items-start text-left hover:shadow-md hover:-translate-y-0.5 transition-all">
-      <span className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-50 to-orange-100
+      <span className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100
                        flex items-center justify-center text-2xl mb-2.5">
         {p.emoji || "🛒"}
       </span>
@@ -37,15 +35,21 @@ function getGuestCart() {
   try { return JSON.parse(localStorage.getItem("s2h_guest_cart") || "{}"); } catch { return {}; }
 }
 
-function setGuestCart(cart) {
-  localStorage.setItem("s2h_guest_cart", JSON.stringify(cart));
+// isOutOfStock/notifyCartUpdated mirror ShopPage.jsx's conventions —
+// null stock_quantity means untracked/always available, and every
+// cart mutation fires a CustomEvent so GuestLayout's header cart
+// badge (which lives outside this component) stays in sync.
+function isOutOfStock(p) {
+  return p?.stock_quantity != null && p.stock_quantity <= 0;
+}
+function notifyCartUpdated() {
+  window.dispatchEvent(new Event("s2h-cart-updated"));
 }
 
 export default function GuestProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const sessionId = getSessionId();
-  const { settings } = useBranding();
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -77,11 +81,14 @@ export default function GuestProductDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const outOfStock = isOutOfStock(product);
+
   const addToCart = () => {
-    if (!product) return;
+    if (!product || outOfStock) return;
     setCart((prev) => {
       const copy = { ...prev };
       copy[product.id] = (copy[product.id] || 0) + qty;
+      notifyCartUpdated();
       return copy;
     });
     toast.success(`${product.name} added to cart.`);
@@ -91,18 +98,16 @@ export default function GuestProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto animate-pulse px-4 py-8">
-          <div className="h-4 bg-gray-200 rounded w-24 mb-4" />
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-            <div className="flex flex-col sm:flex-row gap-6">
-              <div className="w-28 h-28 rounded-2xl bg-gray-100 flex-shrink-0" />
-              <div className="flex-1 space-y-3">
-                <div className="h-6 bg-gray-100 rounded w-1/2" />
-                <div className="h-4 bg-gray-100 rounded w-1/3" />
-                <div className="h-8 bg-gray-100 rounded w-24" />
-                <div className="h-4 bg-gray-100 rounded w-full" />
-              </div>
+      <div className="max-w-4xl mx-auto animate-pulse">
+        <div className="h-4 bg-gray-100 rounded w-24 mb-4" />
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="w-28 h-28 rounded-2xl bg-gray-100 flex-shrink-0" />
+            <div className="flex-1 space-y-3">
+              <div className="h-6 bg-gray-100 rounded w-1/2" />
+              <div className="h-4 bg-gray-100 rounded w-1/3" />
+              <div className="h-8 bg-gray-100 rounded w-24" />
+              <div className="h-4 bg-gray-100 rounded w-full" />
             </div>
           </div>
         </div>
@@ -112,188 +117,176 @@ export default function GuestProductDetailPage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center max-w-md mx-4">
-          <p className="text-5xl mb-4">🔍</p>
-          <p className="text-gray-600 font-semibold">Product not found</p>
-          <Link to="/shop" className="inline-block text-brand-600 font-semibold text-sm mt-3">
-            ← Back to shop
-          </Link>
-        </div>
+      <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center max-w-4xl mx-auto">
+        <p className="text-5xl mb-4">🔍</p>
+        <p className="text-gray-600 font-semibold">Product not found</p>
+        <Link to="/shop" className="inline-block text-brand-600 font-semibold text-sm mt-3">
+          ← Back to shop
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ── Navbar ──────────────────────────────────────── */}
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-4xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
-          <Link to="/shop" className="flex items-center gap-2.5">
-            <BrandLogo size="md" />
-            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">{settings.site_name}</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            {cartCount > 0 && (
-              <button
-                onClick={() => navigate("/checkout")}
-                className="relative flex items-center gap-2 bg-brand-500 hover:bg-brand-600
-                           text-white font-semibold px-4 py-2.5 rounded-full transition-all shadow-sm text-sm">
-                <FiShoppingCart size={15} />
-                Cart ({cartCount})
-              </button>
-            )}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4 transition-colors">
+        <FiArrowLeft size={15} /> Back
+      </button>
+
+      {/* Main card */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className={`w-28 h-28 rounded-2xl bg-gradient-to-br from-brand-50 to-brand-100
+                          flex items-center justify-center text-6xl flex-shrink-0
+                          ${outOfStock ? "opacity-50" : ""}`}>
+            {product.emoji || "🛒"}
           </div>
-        </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4 transition-colors">
-          <FiArrowLeft size={15} /> Back
-        </button>
-
-        {/* Main card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
-          <div className="flex flex-col sm:flex-row gap-6">
-            <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-brand-50 to-orange-100
-                            flex items-center justify-center text-6xl flex-shrink-0">
-              {product.emoji || "🛒"}
-            </div>
-
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-2.5 mb-1">
-                <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
-                <span
-                  className={`w-4 h-4 rounded-[4px] border-2 flex items-center justify-center
-                    ${product.diet === "veg" ? "border-green-500" : "border-red-500"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full
-                    ${product.diet === "veg" ? "bg-green-500" : "bg-red-500"}`} />
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2.5 mb-1">
+              <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
+              <span
+                className={`w-4 h-4 rounded-[4px] border-2 flex items-center justify-center
+                  ${product.diet === "veg" ? "border-green-500" : "border-red-500"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full
+                  ${product.diet === "veg" ? "bg-green-500" : "bg-red-500"}`} />
+              </span>
+              {outOfStock ? (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                  Out of stock
                 </span>
-              </div>
-              <p className="text-sm text-gray-500">{product.category} · {product.unit}</p>
-              <p className="mt-3 font-bold text-2xl text-gray-900">
-                ${Number(product.price).toFixed(2)}
-                <span className="text-sm text-gray-400 font-normal">/{product.unit}</span>
-              </p>
-              <p className="mt-3 text-sm text-gray-600 leading-relaxed">{product.description}</p>
+              ) : product.stock_quantity != null && product.stock_quantity <= 5 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  Only {product.stock_quantity} left
+                </span>
+              )}
             </div>
+            <p className="text-sm text-gray-500">{product.category} · {product.unit}</p>
+            <p className="mt-3 font-bold text-2xl text-gray-900">
+              ${Number(product.price).toFixed(2)}
+              <span className="text-sm text-gray-400 font-normal">/{product.unit}</span>
+            </p>
+            <p className="mt-3 text-sm text-gray-600 leading-relaxed">{product.description}</p>
           </div>
+        </div>
 
-          {/* Add to cart */}
-          <div className="mt-6 pt-5 border-t border-gray-50 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-1.5 py-1.5">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-1.5 hover:bg-white rounded-full transition-colors">
-                <FiMinus size={14} className="text-gray-500" />
-              </button>
-              <span className="text-sm font-bold w-6 text-center">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="p-1.5 hover:bg-white rounded-full transition-colors">
-                <FiPlus size={14} className="text-gray-500" />
-              </button>
-            </div>
-            <button
-              onClick={addToCart}
-              className="btn-primary flex items-center gap-2 rounded-full">
-              <FiShoppingCart size={15} /> Add to cart · ${(Number(product.price) * qty).toFixed(2)}
+        {/* Add to cart */}
+        <div className="mt-6 pt-5 border-t border-gray-50 flex flex-wrap items-center gap-3">
+          <div className={`flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-1.5 py-1.5
+                          ${outOfStock ? "opacity-50 pointer-events-none" : ""}`}>
+            <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-1.5 hover:bg-white rounded-full transition-colors">
+              <FiMinus size={14} className="text-gray-500" />
             </button>
-            {cartCount > 0 && (
-              <button
-                onClick={() => navigate("/checkout")}
-                className="btn-secondary flex items-center gap-2 rounded-full text-sm">
-                Go to checkout ({cartCount} item{cartCount !== 1 ? "s" : ""})
-              </button>
-            )}
+            <span className="text-sm font-bold w-6 text-center">{qty}</span>
+            <button onClick={() => setQty(qty + 1)} className="p-1.5 hover:bg-white rounded-full transition-colors">
+              <FiPlus size={14} className="text-gray-500" />
+            </button>
           </div>
-
-          {/* Alias chips */}
-          {product.aliases && product.aliases.length > 0 && (
-            <div className="mt-6 pt-5 border-t border-gray-50">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Also known as
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {product.aliases.map((a) => (
-                  <span key={a} className="px-2.5 py-1 rounded-full text-xs font-medium
-                    bg-gray-50 text-gray-600 border border-gray-200">
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Delivery schedule */}
-          {availability && (
-            <div className="mt-6 pt-5 border-t border-gray-50">
-              <div className="flex items-center gap-2 text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                <FiTruck size={14} className="text-brand-500" />
-                Delivery schedule
-              </div>
-              <div className={`flex items-center gap-3 p-4 rounded-xl border
-                ${availability.in_stock
-                  ? "bg-green-50 border-green-200"
-                  : availability.earliest_delivery_date
-                    ? "bg-amber-50 border-amber-200"
-                    : "bg-red-50 border-red-200"}`}>
-                {availability.in_stock ? (
-                  <>
-                    <FiCheckCircle className="text-green-600 flex-shrink-0" size={20} />
-                    <div>
-                      <p className="text-green-800 font-medium">In stock — ready to ship</p>
-                      <p className="text-green-700 text-sm">
-                        Earliest delivery: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
-                      </p>
-                    </div>
-                  </>
-                ) : availability.earliest_delivery_date ? (
-                  <>
-                    <FiCalendar className="text-amber-600 flex-shrink-0" size={20} />
-                    <div>
-                      <p className="text-amber-800 font-medium">Currently out of stock</p>
-                      <p className="text-amber-700 text-sm">
-                        Next restock: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <FiAlertCircle className="text-red-600 flex-shrink-0" size={20} />
-                    <div>
-                      <p className="text-red-800 font-medium">Out of stock — no delivery schedule</p>
-                      <p className="text-red-700 text-sm">Contact us for availability.</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+          <button
+            onClick={addToCart}
+            disabled={outOfStock}
+            className="btn-primary flex items-center gap-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed">
+            <FiShoppingCart size={15} />
+            {outOfStock ? "Out of stock" : `Add to cart · $${(Number(product.price) * qty).toFixed(2)}`}
+          </button>
+          {cartCount > 0 && (
+            <button
+              onClick={() => navigate("/checkout")}
+              className="btn-secondary flex items-center gap-2 rounded-full text-sm">
+              Go to checkout ({cartCount} item{cartCount !== 1 ? "s" : ""})
+            </button>
           )}
         </div>
 
-        {/* Related */}
-        {related.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-bold text-gray-900 mb-3">You may also like</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {related.map((p) => (
-                <ProductCard key={p.product_id} p={p} onClick={() => navigate(`/shop/${p.product_id}`)} />
+        {/* Alias chips */}
+        {product.aliases && product.aliases.length > 0 && (
+          <div className="mt-6 pt-5 border-t border-gray-50">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Also known as
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {product.aliases.map((a) => (
+                <span key={a} className="px-2.5 py-1 rounded-full text-xs font-medium
+                  bg-gray-50 text-gray-600 border border-gray-200">
+                  {a}
+                </span>
               ))}
             </div>
           </div>
         )}
 
-        {/* Recently viewed */}
-        {recent.length > 0 && (
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-3">Recently viewed</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {recent.map((p) => (
-                <ProductCard key={p.id} p={p} onClick={() => navigate(`/shop/${p.id}`)} />
-              ))}
+        {/* Delivery schedule */}
+        {availability && (
+          <div className="mt-6 pt-5 border-t border-gray-50">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              <FiTruck size={14} className="text-brand-500" />
+              Delivery schedule
+            </div>
+            <div className={`flex items-center gap-3 p-4 rounded-xl border
+              ${availability.in_stock
+                ? "bg-green-50 border-green-200"
+                : availability.earliest_delivery_date
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-red-50 border-red-200"}`}>
+              {availability.in_stock ? (
+                <>
+                  <FiCheckCircle className="text-green-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-green-800 font-medium">In stock — ready to ship</p>
+                    <p className="text-green-700 text-sm">
+                      Earliest delivery: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
+                    </p>
+                  </div>
+                </>
+              ) : availability.earliest_delivery_date ? (
+                <>
+                  <FiCalendar className="text-amber-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-amber-800 font-medium">Currently out of stock</p>
+                    <p className="text-amber-700 text-sm">
+                      Next restock: <span className="font-semibold">{formatDate(availability.earliest_delivery_date)}</span>
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <FiAlertCircle className="text-red-600 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="text-red-800 font-medium">Out of stock — no delivery schedule</p>
+                    <p className="text-red-700 text-sm">Contact us for availability.</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Related */}
+      {related.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">You may also like</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {related.map((p) => (
+              <ProductCard key={p.product_id} p={p} onClick={() => navigate(`/shop/${p.product_id}`)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recently viewed */}
+      {recent.length > 0 && (
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 mb-3">Recently viewed</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {recent.map((p) => (
+              <ProductCard key={p.id} p={p} onClick={() => navigate(`/shop/${p.id}`)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Sticky cart bar ─────────────────────────────── */}
       {cartCount > 0 && (

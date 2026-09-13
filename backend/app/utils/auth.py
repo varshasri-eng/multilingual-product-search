@@ -8,11 +8,12 @@ from app.models.session import Session
 from app.models.customer import Customer
 
 # ── Permission hierarchy ─────────────────────────────────────
-# full > write > read
+# superadmin > full > write > read
 PERMISSION_LEVELS = {
     "read":  1,
     "write": 2,
     "full":  3,
+    "superadmin": 4,
 }
 
 

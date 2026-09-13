@@ -3,7 +3,17 @@ import { useAuth } from "../context/AuthContext";
 import { useBranding } from "../context/BrandingContext";
 import { logout } from "../api/auth";
 import toast from "react-hot-toast";
-import { FiUsers, FiLogOut, FiHome, FiShield, FiSearch, FiDroplet } from "react-icons/fi";
+import {
+  FiUsers,
+  FiLogOut,
+  FiHome,
+  FiShield,
+  FiSearch,
+  FiDroplet,
+  FiPackage,
+  FiTruck,
+  FiCreditCard,
+} from "react-icons/fi";
 import BrandLogo from "./BrandLogo";
 
 export default function AdminLayout() {
@@ -55,6 +65,12 @@ export default function AdminLayout() {
           <NavLink to="/admin/customers" className={navClass}>
             <FiUsers /> Customers
           </NavLink>
+          <NavLink to="/admin/orders" className={navClass}>
+            <FiPackage /> Orders
+          </NavLink>
+          <NavLink to="/admin/delivery-rules" className={navClass}>
+            <FiTruck /> Delivery Rules
+          </NavLink>
           <NavLink to="/admin/staff" className={navClass}>
             <FiShield /> Staff
           </NavLink>
@@ -63,6 +79,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/branding" className={navClass}>
             <FiDroplet /> Branding
+          </NavLink>
+          <NavLink to="/admin/payment-settings" className={navClass}>
+            <FiCreditCard /> Payment Settings
           </NavLink>
         </nav>
 

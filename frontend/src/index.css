@@ -8,11 +8,34 @@
     @apply bg-gray-50 text-gray-900;
   }
 
-  /* Dynamic branding colors via CSS variables */
+  /* Dynamic branding — pastel green defaults, overridden at runtime
+     by BrandingContext.jsx from the admin's Branding settings.
+     Kept as RGB triples (not hex) because Tailwind's
+     rgb(var(--x) / <alpha-value>) pattern in tailwind.config.js
+     requires that format for its opacity modifiers (e.g. bg-brand-500/25)
+     to work. These are the *build-time* fallback shown before/if the
+     JS-driven override runs — computed once (see the color-scale
+     generator in BrandingContext.jsx) from the same base color as
+     SiteSettings.primary_color's default (#4FA372), so first paint
+     already matches what the DB default would produce. */
   :root {
-    --color-primary: #e89208;
-    --color-secondary: #1f2937;
-    --color-accent: #f59e0b;
+    --brand-50:  245 249 247;
+    --brand-100: 229 240 234;
+    --brand-200: 202 226 212;
+    --brand-300: 168 210 185;
+    --brand-400: 122 189 150;
+    --brand-500: 79 163 114;
+    --brand-600: 65 139 95;
+    --brand-700: 51 111 76;
+    --brand-800: 39 87 59;
+    --brand-900: 28 64 43;
+
+    /* Legacy single-value vars — only .btn-primary consumes these
+       directly right now. Kept for backward compatibility; the
+       brand-* scale above is what actually drives the rest of the UI. */
+    --color-primary: #4fa372;
+    --color-secondary: #2e3b33;
+    --color-accent: #7dd8a6;
   }
 }
 

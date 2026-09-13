@@ -13,7 +13,7 @@ function ColorField({ label, value, onChange }) {
       <div className="flex items-center gap-2">
         <input
           type="color"
-          value={value || "#e89208"}
+          value={value || "#4fa372"}
           onChange={(e) => onChange(e.target.value)}
           className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
         />
@@ -22,7 +22,7 @@ function ColorField({ label, value, onChange }) {
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
           className="input flex-1"
-          placeholder="#e89208"
+          placeholder="#4fa372"
         />
       </div>
     </div>
@@ -132,7 +132,11 @@ export default function AdminBrandingPage() {
 
         {tab === "colors" && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500 mb-2">These colors apply across the entire site via CSS variables.</p>
+            <p className="text-sm text-gray-500 mb-2">
+              Primary color drives the site's whole accent palette — buttons, badges,
+              highlights, and focus states all derive their shades from it, not just
+              this one exact value.
+            </p>
             <ColorField label="Primary color" value={settings.primary_color} onChange={(v) => update("primary_color", v)} />
             <ColorField label="Secondary color" value={settings.secondary_color} onChange={(v) => update("secondary_color", v)} />
             <ColorField label="Accent color" value={settings.accent_color} onChange={(v) => update("accent_color", v)} />
@@ -145,13 +149,38 @@ export default function AdminBrandingPage() {
                 <div className="px-4 py-2 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: settings.secondary_color }}>Secondary</div>
                 <div className="px-4 py-2 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: settings.accent_color }}>Accent</div>
               </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Save changes to see the full site-wide palette update — this preview
+                only shows the three raw values, not the generated shade scale.
+              </p>
             </div>
           </div>
         )}
 
         {tab === "hero" && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500 mb-2">Customize the landing page hero section.</p>
+            <p className="text-sm text-gray-500 mb-2">Customize the shop page's hero/banner section.</p>
+            <div>
+              <label className="label flex items-center gap-1.5"><FiImage size={13} /> Banner image URL</label>
+              <input
+                className="input"
+                value={settings.hero_banner_url || ""}
+                onChange={(e) => update("hero_banner_url", e.target.value)}
+                placeholder="https://..."
+              />
+              {settings.hero_banner_url ? (
+                <img
+                  src={settings.hero_banner_url}
+                  alt="Banner preview"
+                  className="w-full max-h-48 object-cover mt-2 rounded-xl border border-gray-100"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">
+                  Shown above the search bar on the shop page. Leave blank to hide the banner entirely.
+                </p>
+              )}
+            </div>
             <div>
               <label className="label">Hero title</label>
               <input className="input" value={settings.hero_title || ""} onChange={(e) => update("hero_title", e.target.value)} />
@@ -201,6 +230,18 @@ export default function AdminBrandingPage() {
             <div>
               <label className="label">Twitter / X URL</label>
               <input className="input" value={settings.twitter_url || ""} onChange={(e) => update("twitter_url", e.target.value)} placeholder="https://x.com/..." />
+            </div>
+            <div>
+              <label className="label">WhatsApp community invite link</label>
+              <input
+                className="input"
+                value={settings.whatsapp_community_url || ""}
+                onChange={(e) => update("whatsapp_community_url", e.target.value)}
+                placeholder="https://chat.whatsapp.com/..."
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Shown as a "Join our WhatsApp community" link in the footer. Leave blank to hide it.
+              </p>
             </div>
           </div>
         )}

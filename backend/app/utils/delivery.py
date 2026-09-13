@@ -33,23 +33,34 @@ def _next_occurrence_of_day_of_month(today, day_of_month):
 def get_earliest_delivery_date(today, in_stock, restock_cycle,
                                 restock_day_of_week=None,
                                 restock_day_of_month=None,
-                                min_lead_days=3):
+                                min_lead_days=0,
+                                order_type="delivery"):
     """
-    Returns the earliest valid delivery date (date object), or None if blocked.
+    Returns the earliest valid fulfillment date (date object), or None if blocked.
+
+    order_type controls whether min_lead_days is applied:
+      - "delivery": in_stock -> today + min_lead_days
+                    out of stock -> next restock + min_lead_days
+      - "pickup":   in_stock -> today (no lead time — ready as soon as the
+                    order is placed)
+                    out of stock -> next restock (no lead time added on
+                    top — the customer picks up as soon as it's back)
     """
+    lead_days = min_lead_days if order_type == "delivery" else 0
+
     if in_stock:
-        return today + timedelta(days=min_lead_days)
+        return today + timedelta(days=lead_days)
 
     if restock_cycle == "weekly":
         if restock_day_of_week is None:
             raise ValueError("restock_day_of_week required for weekly cycle")
         next_restock = _next_occurrence_of_weekday(today, restock_day_of_week)
-        return next_restock + timedelta(days=min_lead_days)
+        return next_restock + timedelta(days=lead_days)
 
     if restock_cycle == "monthly":
         if restock_day_of_month is None:
             raise ValueError("restock_day_of_month required for monthly cycle")
         next_restock = _next_occurrence_of_day_of_month(today, restock_day_of_month)
-        return next_restock + timedelta(days=min_lead_days)
+        return next_restock + timedelta(days=lead_days)
 
     return None
