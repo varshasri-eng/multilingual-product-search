@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   FiArrowLeft, FiShoppingCart, FiPlus, FiMinus, FiX, FiCheckCircle,
@@ -597,33 +597,27 @@ export default function GuestCheckoutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
 
-      {/* Navbar */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
 
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-4xl mx-auto flex items-center px-4 sm:px-6 h-16 gap-3">
+        <button
+          onClick={() =>
+            navigate(-1)
+          }
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4 transition-colors"
+        >
+          <FiArrowLeft size={15} /> Back
+        </button>
 
-          <button
-            onClick={() =>
-              navigate(-1)
-            }
-            className="text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            <FiArrowLeft size={20} />
-          </button>
-
+        <div className="flex items-center justify-between mb-4">
           <span className="text-lg font-bold text-gray-900">
             Checkout
           </span>
 
-          <span className="ml-auto text-sm text-gray-400">
+          <span className="text-sm text-gray-400">
             {cartCount} item
             {cartCount !== 1 ? "s" : ""}
           </span>
-
         </div>
-      </nav>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
 
         <div className="grid lg:grid-cols-5 gap-6">
 
@@ -761,6 +755,7 @@ export default function GuestCheckoutPage() {
                 ].map((t) => (
 
                   <button
+                    key={t.key}
                     onClick={() => {
                         setOrderType(t.key);
 

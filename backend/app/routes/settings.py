@@ -28,8 +28,18 @@ def get_settings():
     return jsonify(_get_settings().to_dict()), 200
 
 
-@admin_required
+# NOTE: decorator order matters here. @settings_bp.route(...) must be
+# OUTERMOST (on top) and @admin_required INNERMOST (right above the
+# function) — Flask registers whatever function object the route
+# decorator receives at decoration time. With the previous order
+# (@admin_required on top, @settings_bp.route(...) underneath), the
+# route decorator ran FIRST and registered the raw, unprotected
+# update_settings function in the URL map; @admin_required then wrapped
+# a function reference that Flask was never actually going to call —
+# so this endpoint was not actually enforcing admin auth. Same correct
+# order already used everywhere in admin.py.
 @settings_bp.route("", methods=["PUT"])
+@admin_required
 def update_settings(customer):
     data = request.get_json(silent=True) or {}
     s = _get_settings()
@@ -46,11 +56,11 @@ def update_settings(customer):
 
     # ── Brand colors ──────────────────────────────────────
     if "primary_color" in data:
-        s.primary_color = data["primary_color"] or "#e89208"
+        s.primary_color = data["primary_color"] or "#4FA372"
     if "secondary_color" in data:
-        s.secondary_color = data["secondary_color"] or "#1f2937"
+        s.secondary_color = data["secondary_color"] or "#2E3B33"
     if "accent_color" in data:
-        s.accent_color = data["accent_color"] or "#f59e0b"
+        s.accent_color = data["accent_color"] or "#7DD8A6"
 
     # ── Hero / Landing ────────────────────────────────────
     if "hero_title" in data:
@@ -59,6 +69,8 @@ def update_settings(customer):
         s.hero_subtitle = data["hero_subtitle"]
     if "hero_cta" in data:
         s.hero_cta = data["hero_cta"]
+    if "hero_banner_url" in data:
+        s.hero_banner_url = data["hero_banner_url"] or None
 
     # ── Contact ───────────────────────────────────────────
     if "contact_email" in data:
@@ -79,6 +91,8 @@ def update_settings(customer):
         s.instagram_url = data["instagram_url"] or None
     if "twitter_url" in data:
         s.twitter_url = data["twitter_url"] or None
+    if "whatsapp_community_url" in data:
+        s.whatsapp_community_url = data["whatsapp_community_url"] or None
 
     db.session.commit()
     return jsonify({"message": "Settings updated.", "settings": s.to_dict()}), 200

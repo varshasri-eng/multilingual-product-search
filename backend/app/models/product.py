@@ -86,4 +86,12 @@ class Product(db.Model):
             "is_featured": self.is_featured,
             "taxable": self.taxable,
             "tax_percentage": float(self.tax_percentage or 0),
+            # stock_quantity is nullable-by-convention elsewhere in this
+            # codebase (None means "untracked / always available" — see
+            # utils/delivery.py's sufficient_stock checks). Exposing it
+            # here lets the shop page filter out-of-stock items without
+            # a separate endpoint; None still means "don't treat as out
+            # of stock" on the frontend, same convention as everywhere
+            # else that reads this column.
+            "stock_quantity": self.stock_quantity,
         }

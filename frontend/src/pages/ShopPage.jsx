@@ -1,24 +1,45 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
-  FiPlus, FiMinus, FiShoppingCart, FiSearch, FiX,
+  FiPlus, FiMinus, FiShoppingCart, FiSearch, FiX, FiEye, FiEyeOff,
 } from "react-icons/fi";
 import { getProducts, getCategories } from "../api/products";
 import { useBranding } from "../context/BrandingContext";
-import BrandLogo from "../components/BrandLogo";
+
+// Dispatched after every cart mutation so GuestLayout's header badge
+// (which lives outside this component) stays in sync — see
+// GuestLayout.jsx's "s2h-cart-updated" listener.
+function notifyCartUpdated() {
+  window.dispatchEvent(new Event("s2h-cart-updated"));
+}
+
+// null/undefined stock_quantity means "untracked" (always available)
+// — same convention used throughout the backend (delivery.py,
+// orders.py's availability checks, etc.). Only an explicit value
+// <= 0 counts as out of stock.
+function isOutOfStock(p) {
+  return p.stock_quantity != null && p.stock_quantity <= 0;
+}
+const LOW_STOCK_THRESHOLD = 5;
 
 export default function ShopPage() {
   const navigate = useNavigate();
   const { settings } = useBranding();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState(() => {
     try { return JSON.parse(localStorage.getItem("s2h_guest_cart") || "{}"); } catch { return {}; }
   });
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState(searchParams.get("category") || "All");
   const [search, setSearch] = useState("");
+  // Default OFF — hides out-of-stock items unless explicitly toggled
+  // on, since "a lot of items have no stock" was the actual complaint;
+  // showing them by default would keep surfacing the same problem.
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
 
   useEffect(() => {
     getCategories()
@@ -29,6 +50,14 @@ export default function ShopPage() {
       .catch(() => toast.error("Failed to load products."))
       .finally(() => setLoading(false));
   }, []);
+
+  // Picks up ?category= from GuestLayout's category nav links (or a
+  // direct URL) whenever it changes, e.g. clicking a category link
+  // while already on /shop.
+  useEffect(() => {
+    const fromUrl = searchParams.get("category");
+    if (fromUrl && fromUrl !== category) setCategory(fromUrl);
+  }, [searchParams]);
 
   useEffect(() => {
     localStorage.setItem("s2h_guest_cart", JSON.stringify(cart));
@@ -69,9 +98,15 @@ export default function ShopPage() {
   );
 
   const list = search.trim() ? (searchResults ?? []) : products;
-  const filtered = list.filter(
-    (p) => (category === "All" || p.category === category)
-  );
+  const filtered = list.filter((p) => {
+    if (category !== "All" && p.category !== category) return false;
+    if (!showOutOfStock && isOutOfStock(p)) return false;
+    return true;
+  });
+
+  const outOfStockCount = list.filter(
+    (p) => (category === "All" || p.category === category) && isOutOfStock(p)
+  ).length;
 
   const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
   const cartTotal = Object.entries(cart).reduce((sum, [id, qty]) => {
@@ -85,37 +120,36 @@ export default function ShopPage() {
       const copy = { ...prev };
       if (next <= 0) delete copy[id];
       else copy[id] = next;
+      notifyCartUpdated();
       return copy;
     });
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ── Navbar ──────────────────────────────────────── */}
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
-          <Link to="/" className="flex items-center gap-2.5">
-            <BrandLogo size="md" />
-            <span className="text-lg font-bold text-gray-900 tracking-tight hidden sm:block">{settings.site_name}</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/login")}
-              className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors px-3 py-2">
-              Sign in
-            </button>
-            {cartCount > 0 && (
-              <button
-                onClick={() => navigate("/checkout")}
-                className="relative flex items-center gap-2 bg-brand-500 hover:bg-brand-600
-                           text-white font-semibold px-4 py-2.5 rounded-full transition-all shadow-sm text-sm">
-                <FiShoppingCart size={15} />
-                Cart ({cartCount})
-                <span className="ml-1 font-bold">${cartTotal.toFixed(2)}</span>
-              </button>
+      {/* ── Hero banner ──────────────────────────────────
+          Only rendered when an admin has actually set one via
+          Branding settings — no banner, no empty gap. */}
+      {settings.hero_banner_url && (
+        <div className="relative">
+          <img
+            src={settings.hero_banner_url}
+            alt=""
+            className="w-full h-48 sm:h-64 object-cover"
+            onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }}
+          />
+          <div className="absolute inset-0 bg-black/30 flex flex-col items-center
+                          justify-center text-center px-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white drop-shadow-sm">
+              {settings.hero_title}
+            </h1>
+            {settings.hero_subtitle && (
+              <p className="text-sm sm:text-base text-white/90 mt-2 max-w-xl drop-shadow-sm">
+                {settings.hero_subtitle}
+              </p>
             )}
           </div>
         </div>
-      </nav>
+      )}
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* ── Search ────────────────────────────────────── */}
@@ -151,11 +185,14 @@ export default function ShopPage() {
             <span className="text-brand-600 font-medium">மஞ்சள்</span>
           </p>
         ) : (
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-1 px-1">
+          <div className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-1 px-1">
             {catNames.map((c) => (
               <button
                 key={c}
-                onClick={() => setCategory(c)}
+                onClick={() => {
+                  setCategory(c);
+                  setSearchParams(c === "All" ? {} : { category: c });
+                }}
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all
                   ${category === c
                     ? "bg-gray-900 text-white shadow-sm"
@@ -165,6 +202,22 @@ export default function ShopPage() {
             ))}
           </div>
         )}
+
+        {/* ── Stock filter toggle ──────────────────────── */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={() => setShowOutOfStock((v) => !v)}
+            className="flex items-center gap-2 text-xs font-medium text-gray-500
+                       hover:text-gray-700 transition-colors">
+            {showOutOfStock ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+            {showOutOfStock ? "Hide out-of-stock items" : "Show out-of-stock items"}
+            {!showOutOfStock && outOfStockCount > 0 && (
+              <span className="bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">
+                {outOfStockCount} hidden
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* ── Products ──────────────────────────────────── */}
         {loading ? (
@@ -183,22 +236,40 @@ export default function ShopPage() {
             <p className="text-5xl mb-4">🔍</p>
             <p className="text-gray-600 font-semibold">No products found</p>
             <p className="text-gray-400 text-sm mt-1">
-              {search.trim() ? "Try a different search — maybe in another language?" : "Try a different category"}
+              {search.trim()
+                ? "Try a different search — maybe in another language?"
+                : !showOutOfStock && outOfStockCount > 0
+                ? "Everything in this category is currently out of stock."
+                : "Try a different category"}
             </p>
+            {!showOutOfStock && outOfStockCount > 0 && (
+              <button
+                onClick={() => setShowOutOfStock(true)}
+                className="mt-3 text-sm font-semibold text-brand-600 hover:underline">
+                Show out-of-stock items anyway
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((p) => {
               const qty = cart[p.id] || 0;
+              const outOfStock = isOutOfStock(p);
+              const lowStock =
+                !outOfStock &&
+                p.stock_quantity != null &&
+                p.stock_quantity <= LOW_STOCK_THRESHOLD;
+
               return (
-                <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm
+                <div key={p.id} className={`bg-white rounded-2xl border shadow-sm
                                            hover:shadow-md hover:-translate-y-0.5 transition-all
-                                           p-4 flex flex-col">
+                                           p-4 flex flex-col
+                                           ${outOfStock ? "border-gray-100 opacity-60" : "border-gray-100"}`}>
                   <div
                     className="cursor-pointer flex-1"
                     onClick={() => navigate(`/shop/${p.id}`)}>
                     <div className="flex items-start justify-between mb-3">
-                      <span className="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-50 to-orange-100
+                      <span className="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100
                                        flex items-center justify-center text-3xl">
                         {p.emoji || "🛒"}
                       </span>
@@ -211,13 +282,28 @@ export default function ShopPage() {
                     </div>
                     <p className="text-sm font-semibold text-gray-900 leading-snug">{p.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{p.category} · {p.unit}</p>
+                    {outOfStock ? (
+                      <span className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5
+                                       rounded-full bg-red-50 text-red-600">
+                        Out of stock
+                      </span>
+                    ) : lowStock && (
+                      <span className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5
+                                       rounded-full bg-amber-50 text-amber-700">
+                        Only {p.stock_quantity} left
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                     <p className="font-bold text-gray-900">
                       ${Number(p.price).toFixed(2)}
                     </p>
-                    {qty === 0 ? (
+                    {outOfStock ? (
+                      <span className="text-xs font-semibold text-gray-400 px-3 py-1.5">
+                        Unavailable
+                      </span>
+                    ) : qty === 0 ? (
                       <button
                         onClick={() => updateQty(p.id, 1)}
                         className="flex items-center gap-1 text-xs font-semibold text-brand-600
