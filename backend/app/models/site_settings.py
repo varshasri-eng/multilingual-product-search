@@ -18,14 +18,24 @@ class SiteSettings(db.Model):
     favicon_url  = db.Column(db.Text, default=None)   # favicon URL
 
     # ── Brand colors (hex) ────────────────────────────────
-    primary_color   = db.Column(db.String(7), default="#e89208")  # brand-500
-    secondary_color = db.Column(db.String(7), default="#1f2937")  # gray-800
-    accent_color    = db.Column(db.String(7), default="#f59e0b")  # amber-500
+    # Pastel green palette. primary_color is the anchor color the
+    # frontend generates its full brand-50..brand-900 Tailwind scale
+    # from (see BrandingContext.jsx) — changing this here changes
+    # nearly every branded element site-wide (buttons, badges,
+    # highlights, focus rings), not just a couple of accent spots.
+    primary_color   = db.Column(db.String(7), default="#4FA372")  # pastel green
+    secondary_color = db.Column(db.String(7), default="#2E3B33")  # muted sage-charcoal
+    accent_color    = db.Column(db.String(7), default="#7DD8A6")  # soft mint highlight
 
     # ── Hero / Landing ────────────────────────────────────
     hero_title    = db.Column(db.String(255), default="Fresh groceries, delivered to your door")
     hero_subtitle = db.Column(db.String(500), default="Shop your favourite Indian groceries in your own language.")
     hero_cta      = db.Column(db.String(100), default="Start shopping")
+    # Banner image shown above the shop page search/category area.
+    # Same "admin provides a URL" pattern as logo_url/favicon_url,
+    # not a file-upload field — consistent with how the rest of
+    # branding already works in this codebase.
+    hero_banner_url = db.Column(db.Text, default=None)
 
     # ── Contact ───────────────────────────────────────────
     contact_email = db.Column(db.String(255), default=None)
@@ -39,6 +49,11 @@ class SiteSettings(db.Model):
     facebook_url  = db.Column(db.Text, default=None)
     instagram_url = db.Column(db.Text, default=None)
     twitter_url   = db.Column(db.Text, default=None)
+    # Invite link to a WhatsApp group/community (e.g. a chat.whatsapp.com
+    # invite link) — shown as a "Join our WhatsApp community" callout
+    # in the footer. Kept separate from contact_phone since that's a
+    # direct dial/message number, not a group invite.
+    whatsapp_community_url = db.Column(db.Text, default=None)
 
     updated_at = db.Column(db.DateTime(timezone=True),
                            default=lambda: datetime.now(timezone.utc),
@@ -56,6 +71,7 @@ class SiteSettings(db.Model):
             "hero_title": self.hero_title,
             "hero_subtitle": self.hero_subtitle,
             "hero_cta": self.hero_cta,
+            "hero_banner_url": self.hero_banner_url,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
             "address": self.address,
@@ -63,4 +79,5 @@ class SiteSettings(db.Model):
             "facebook_url": self.facebook_url,
             "instagram_url": self.instagram_url,
             "twitter_url": self.twitter_url,
+            "whatsapp_community_url": self.whatsapp_community_url,
         }

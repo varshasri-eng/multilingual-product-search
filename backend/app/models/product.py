@@ -47,6 +47,8 @@ class Product(db.Model):
     price            = db.Column(db.Numeric(10, 2), nullable=False)
     discounted_price = db.Column(db.Numeric(10, 2))
     unit             = db.Column(db.String(50))
+    taxable = db.Column(db.Boolean, default=True, nullable=False)
+    tax_percentage = db.Column(db.Numeric(5, 2), default=9.00, nullable=False)
 
     description      = db.Column(db.Text)
     image_url        = db.Column(db.Text)
@@ -82,4 +84,14 @@ class Product(db.Model):
             "diet": self.diet,
             "is_active": self.is_active,
             "is_featured": self.is_featured,
+            "taxable": self.taxable,
+            "tax_percentage": float(self.tax_percentage or 0),
+            # stock_quantity is nullable-by-convention elsewhere in this
+            # codebase (None means "untracked / always available" — see
+            # utils/delivery.py's sufficient_stock checks). Exposing it
+            # here lets the shop page filter out-of-stock items without
+            # a separate endpoint; None still means "don't treat as out
+            # of stock" on the frontend, same convention as everywhere
+            # else that reads this column.
+            "stock_quantity": self.stock_quantity,
         }

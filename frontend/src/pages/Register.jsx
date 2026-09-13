@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../api/auth";
 import toast from "react-hot-toast";
-import { FiHome, FiArrowRight, FiPhone, FiMail, FiLock, FiMessageCircle } from "react-icons/fi";
+import { FiHome, FiArrowRight, FiUser, FiPhone, FiMail, FiLock, FiMessageCircle } from "react-icons/fi";
 
 export default function Register() {
   const navigate   = useNavigate();
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
+    name: "",
     phone: "",
     whatsapp_number: "",
     email: "",
@@ -40,6 +41,7 @@ export default function Register() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!form.name.trim())        return toast.error("Full name is required.");
     if (!form.phone.trim())       return toast.error("Phone number is required.");
     if (!form.email.trim())       return toast.error("Email is required.");
     if (form.password.length < 8) return toast.error("Password must be at least 8 characters.");
@@ -48,7 +50,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register({
-        name: form.phone,
+        name: form.name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim(),
         whatsapp_number: form.whatsapp_number.trim() || form.phone.trim(),
@@ -78,6 +80,24 @@ export default function Register() {
         </div>
 
         <form onSubmit={handleRegister} className="card space-y-5">
+
+          {/* Name */}
+          <div>
+            <label className="label">
+              Full Name <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <FiUser className="absolute left-3 top-2.5 text-gray-400" size={15} />
+              <input
+                className="input pl-9"
+                placeholder="Jane Doe"
+                type="text"
+                value={form.name}
+                onChange={set("name")}
+                autoComplete="name"
+              />
+            </div>
+          </div>
 
           {/* Phone */}
           <div>

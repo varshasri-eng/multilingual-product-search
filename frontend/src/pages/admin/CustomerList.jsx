@@ -315,7 +315,22 @@ export default function CustomerList() {
             className="input text-xs h-8 py-0 w-36"
             value={`${sortBy}_${sortOrder}`}
             onChange={(e) => {
-              const [by, order] = e.target.value.split("_");
+              // IMPORTANT: split on the LAST underscore only, not
+              // every underscore. sort_by values like "created_at" and
+              // "orders_count" already contain an underscore
+              // themselves, so a plain value.split("_") breaks
+              // "created_at_asc" into ["created", "at", "asc"] instead
+              // of ["created_at", "asc"] — "created" isn't a column
+              // the backend recognizes, so it silently falls back to
+              // its created_at/desc default, and "at" isn't "desc" so
+              // the order was wrong too. Same problem for
+              // "orders_count_desc"/"orders_count_asc". Only
+              // "name_asc"/"name_desc" ever worked, purely because
+              // "name" has no underscore in it.
+              const value = e.target.value;
+              const separatorIndex = value.lastIndexOf("_");
+              const by = value.slice(0, separatorIndex);
+              const order = value.slice(separatorIndex + 1);
               setSortBy(by);
               setSortOrder(order);
               resetPage();

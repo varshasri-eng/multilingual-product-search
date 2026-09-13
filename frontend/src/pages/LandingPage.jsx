@@ -4,7 +4,6 @@ import {
   FiSearch, FiPackage, FiStar,
 } from "react-icons/fi";
 import { useBranding } from "../context/BrandingContext";
-import BrandLogo from "../components/BrandLogo";
 
 const FEATURES = [
   { icon: <FiTruck size={22} />, title: "Fast Delivery", desc: "Same-day delivery in Lathrop & Mountain House" },
@@ -27,32 +26,10 @@ export default function LandingPage() {
   const { settings } = useBranding();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* ── Navbar ──────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 h-16">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size="md" />
-            <span className="text-lg font-bold text-gray-900 tracking-tight">{settings.site_name}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/login")}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors px-3 py-2">
-              Sign in
-            </button>
-            <button
-              onClick={() => navigate("/shop")}
-              className="btn-primary text-sm !px-4 !py-2 rounded-full">
-              Shop now
-            </button>
-          </div>
-        </div>
-      </nav>
-
+    <div className="bg-white">
       {/* ── Hero ────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-50 via-white to-orange-50" />
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-50 via-white to-brand-100" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-20 sm:pt-24 sm:pb-28">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-brand-100/70 text-brand-700
@@ -170,19 +147,6 @@ export default function LandingPage() {
           </button>
         </div>
       </section>
-
-      {/* ── Footer ───────────────────────────────────────── */}
-      <footer className="border-t border-gray-100 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <BrandLogo size="sm" />
-            <span className="text-sm font-semibold text-gray-700">{settings.site_name}</span>
-          </div>
-          <p className="text-xs text-gray-400">
-            {settings.footer_text}
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

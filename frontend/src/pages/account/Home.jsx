@@ -1,11 +1,16 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   FiPlus, FiMinus, FiShoppingCart, FiSearch,
   FiX, FiCheckCircle, FiTruck as FiDelivery, FiPackage, FiCalendar, FiClock,
+  FiEye, FiEyeOff,
 } from "react-icons/fi";
-import { getProducts, getCategories } from "../../api/products";
+import {
+  getProducts,
+  getCategories,
+  getAvailability,
+} from "../../api/products";
 import { createOrder } from "../../api/orders";
 import { getAddresses } from "../../api/customers";
 import { useAuth } from "../../context/AuthContext";
@@ -21,6 +26,15 @@ const deliveryFeeFor = (zip) => {
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
+// null/undefined stock_quantity means "untracked" (always available)
+// — same convention as ShopPage.jsx and the backend's own
+// availability checks. Only an explicit value <= 0 counts as out of
+// stock.
+function isOutOfStock(p) {
+  return p.stock_quantity != null && p.stock_quantity <= 0;
+}
+const LOW_STOCK_THRESHOLD = 5;
+
 export default function Home() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
@@ -32,6 +46,9 @@ export default function Home() {
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
+  // Default OFF, same reasoning as ShopPage.jsx: hides out-of-stock
+  // items unless explicitly toggled on.
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
 
   useEffect(() => {
     getCategories()
@@ -47,18 +64,34 @@ export default function Home() {
     localStorage.setItem("cart", JSON.stringify(cart));
   }, [cart]);
 
-  // Debounced multilingual server search (name + Telugu/Hindi/Tamil aliases)
+  // Debounced multilingual server search (name + Telugu/Hindi/Tamil aliases).
+  // Enter also force-triggers an immediate search (see handleSearchKeyDown
+  // below) — without it, Enter did nothing at all (no <form>, no submit),
+  // so typing fast and hitting Enter could look like "nothing happened"
+  // while the 250ms debounce (plus network latency) was still catching up.
   const [searchResults, setSearchResults] = useState(null);
+  const searchTimeoutRef = useRef(null);
+
+  const runSearch = (q) => {
+    if (!q) { setSearchResults(null); return; }
+    getProducts({ search: q })
+      .then((r) => setSearchResults(r.data.products))
+      .catch(() => setSearchResults([]));
+  };
+
   useEffect(() => {
     const q = search.trim();
     if (!q) { setSearchResults(null); return; }
-    const t = setTimeout(() => {
-      getProducts({ search: q })
-        .then((r) => setSearchResults(r.data.products))
-        .catch(() => setSearchResults([]));
-    }, 250);
-    return () => clearTimeout(t);
+    searchTimeoutRef.current = setTimeout(() => runSearch(q), 250);
+    return () => clearTimeout(searchTimeoutRef.current);
   }, [search]);
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(searchTimeoutRef.current);
+    runSearch(search.trim());
+  };
 
   const catNames = useMemo(
     () => ["All", ...categories.map((c) => c.name)],
@@ -66,9 +99,15 @@ export default function Home() {
   );
 
   const list = search.trim() ? (searchResults ?? []) : products;
-  const filtered = list.filter(
-    (p) => (category === "All" || p.category === category)
-  );
+  const filtered = list.filter((p) => {
+    if (category !== "All" && p.category !== category) return false;
+    if (!showOutOfStock && isOutOfStock(p)) return false;
+    return true;
+  });
+
+  const outOfStockCount = list.filter(
+    (p) => (category === "All" || p.category === category) && isOutOfStock(p)
+  ).length;
 
   const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
 
@@ -119,6 +158,7 @@ export default function Home() {
           placeholder="Search in English, Telugu, Hindi or Tamil…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
         />
         {search && (
           <button
@@ -141,7 +181,7 @@ export default function Home() {
         </p>
       ) : (
         /* Category pills */
-        <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-1 px-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-1 px-1">
           {catNames.map((c) => (
             <button
               key={c}
@@ -155,6 +195,22 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {/* Stock filter toggle */}
+      <div className="flex items-center justify-between mb-5">
+        <button
+          onClick={() => setShowOutOfStock((v) => !v)}
+          className="flex items-center gap-2 text-xs font-medium text-gray-500
+                     hover:text-gray-700 transition-colors">
+          {showOutOfStock ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+          {showOutOfStock ? "Hide out-of-stock items" : "Show out-of-stock items"}
+          {!showOutOfStock && outOfStockCount > 0 && (
+            <span className="bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">
+              {outOfStockCount} hidden
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Product grid */}
       {loading ? (
@@ -173,22 +229,38 @@ export default function Home() {
           <p className="text-5xl mb-4">🔍</p>
           <p className="text-gray-600 font-semibold">No products found</p>
           <p className="text-gray-400 text-sm mt-1">
-            {search.trim() ? "Try a different search — maybe in another language?" : "Try a different category"}
+            {search.trim()
+              ? "Try a different search — maybe in another language?"
+              : !showOutOfStock && outOfStockCount > 0
+              ? "Everything in this category is currently out of stock."
+              : "Try a different category"}
           </p>
+          {!showOutOfStock && outOfStockCount > 0 && (
+            <button
+              onClick={() => setShowOutOfStock(true)}
+              className="mt-3 text-sm font-semibold text-brand-600 hover:underline">
+              Show out-of-stock items anyway
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((p) => {
             const qty = cart[p.id] || 0;
+            const outOfStock = isOutOfStock(p);
+            const lowStock =
+              !outOfStock && p.stock_quantity != null && p.stock_quantity <= LOW_STOCK_THRESHOLD;
+
             return (
-              <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm
+              <div key={p.id} className={`bg-white rounded-2xl border shadow-sm
                                          hover:shadow-md hover:-translate-y-0.5 transition-all
-                                         p-4 flex flex-col">
+                                         p-4 flex flex-col
+                                         ${outOfStock ? "border-gray-100 opacity-60" : "border-gray-100"}`}>
                 <div
                   className="cursor-pointer flex-1"
                   onClick={() => navigate(`/account/products/${p.id}`)}>
                   <div className="flex items-start justify-between mb-3">
-                    <span className="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-50 to-orange-100
+                    <span className="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100
                                      flex items-center justify-center text-3xl">
                       {p.emoji || "🛒"}
                     </span>
@@ -210,14 +282,30 @@ export default function Home() {
                       <span className="font-semibold text-brand-600">"{p.matched_term}"</span>
                     </p>
                   )}
+
+                  {outOfStock ? (
+                    <span className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5
+                                     rounded-full bg-red-50 text-red-600">
+                      Out of stock
+                    </span>
+                  ) : lowStock && (
+                    <span className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5
+                                     rounded-full bg-amber-50 text-amber-700">
+                      Only {p.stock_quantity} left
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <p className="font-bold text-gray-900">
-                    ${Number(p.price).toFixed(2)}
+                    ${Number(p.discounted_price ?? p.price).toFixed(2)}
                   </p>
 
-                  {qty === 0 ? (
+                  {outOfStock ? (
+                    <span className="text-xs font-semibold text-gray-400 px-3 py-1.5">
+                      Unavailable
+                    </span>
+                  ) : qty === 0 ? (
                     <button
                       onClick={() => updateQty(p.id, 1)}
                       className="flex items-center gap-1 text-xs font-semibold text-brand-600
@@ -250,6 +338,7 @@ export default function Home() {
           products={products}
           onClose={() => setShowCheckout(false)}
           onClearCart={() => setCart({})}
+          onUpdateQty={updateQty}
         />
       )}
     </div>
@@ -257,7 +346,7 @@ export default function Home() {
 }
 
 /* ── Checkout modal ─────────────────────────────────────────── */
-function CheckoutModal({ cart, products, onClose, onClearCart }) {
+function CheckoutModal({ cart, products, onClose, onClearCart, onUpdateQty}) {
   const { customer } = useAuth();
   const navigate = useNavigate();
 
@@ -269,12 +358,95 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(null);
 
+  // getAvailability() is passed orderType, and the backend computes
+  // earliest_delivery_date correctly per fulfillment type (pickup skips
+  // min_lead_days entirely). Re-fetches whenever orderType changes —
+  // see the effect below.
+  const [availabilityByProduct, setAvailabilityByProduct] = useState({});
+
   const items = Object.entries(cart)
     .map(([id, qty]) => {
       const p = products.find((x) => x.id === Number(id));
-      return p ? { ...p, quantity: qty, line_total: Number(p.price) * qty } : null;
+      return p ? { ...p, quantity: qty, line_total: Number(p.discounted_price ?? p.price) * qty } : null;
     })
     .filter(Boolean);
+
+  const cartAvailabilityKey = Object.entries(cart)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([id, qty]) => `${id}:${qty}`)
+    .join(",");
+
+  useEffect(() => {
+    if (!items.length) {
+      setAvailabilityByProduct({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAvailability = async () => {
+      const next = {};
+
+      await Promise.all(
+        items.map(async (item) => {
+          next[item.id] = {
+            status: "loading",
+            data: null,
+          };
+
+          try {
+            // IMPORTANT:
+            // Send both the actual quantity requested AND the
+            // current orderType, so the backend computes
+            // earliest_delivery_date with the correct lead-time
+            // rule (pickup skips min_lead_days entirely).
+            const res = await getAvailability(
+              item.id,
+              item.quantity,
+              orderType
+            );
+
+            if (cancelled) return;
+
+            const data = res.data;
+
+            next[item.id] = {
+              status: data.earliest_delivery_date
+                ? "ready"
+                : "unavailable",
+              data,
+            };
+          } catch (error) {
+            if (cancelled) return;
+
+            const status = error.response?.status;
+
+            if (status === 409) {
+              next[item.id] = {
+                status: "unavailable",
+                data: error.response?.data || null,
+              };
+            } else {
+              next[item.id] = {
+                status: "error",
+                data: null,
+              };
+            }
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setAvailabilityByProduct(next);
+    };
+
+    loadAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartAvailabilityKey, orderType]);
 
   useEffect(() => {
     getAddresses()
@@ -287,6 +459,39 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
       .catch(() => setAddresses([]));
   }, []);
 
+  const availabilityBlockedItems = items.filter((item) => {
+    const availability = availabilityByProduct[item.id];
+
+    return (
+      !availability ||
+      availability.status !== "ready" ||
+      !availability.data?.earliest_delivery_date
+    );
+  });
+
+  // Whole-cart earliest deliverable/pickup-able date: the LATEST of
+  // each item's earliest date, since every item must be
+  // available on the chosen date.
+  const earliestCartDeliveryDate = Object.values(
+    availabilityByProduct
+  )
+    .map((a) => a.data?.earliest_delivery_date)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || "";
+
+  // Whenever the cart's earliest date moves forward (new item added,
+  // or orderType switched and pickup/delivery dates differ), snap the
+  // selected date up to it if it's now earlier than what's achievable.
+  useEffect(() => {
+    if (
+      earliestCartDeliveryDate &&
+      (!date || date < earliestCartDeliveryDate)
+    ) {
+      setDate(earliestCartDeliveryDate);
+    }
+  }, [earliestCartDeliveryDate, date]);
+
   const selectedAddress = addresses.find((a) => a.id === Number(addressId));
   const deliveryFee = orderType === "delivery"
     ? deliveryFeeFor(selectedAddress?.address?.zip_code)
@@ -298,7 +503,25 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
     if (orderType === "delivery" && !addressId) {
       return toast.error("Please choose a delivery address.");
     }
+
+    if (availabilityBlockedItems.length > 0) {
+      return toast.error(
+        "Please resolve product availability before placing the order."
+      );
+    }
+
+    if (
+      date &&
+      earliestCartDeliveryDate &&
+      date < earliestCartDeliveryDate
+    ) {
+      return toast.error(
+        `The earliest available date is ${earliestCartDeliveryDate}.`
+      );
+    }
+
     setPlacing(true);
+
     try {
       const res = await createOrder({
         items: items.map((i) => ({ product_id: i.id, quantity: i.quantity })),
@@ -356,26 +579,94 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
 
         <div className="p-6 space-y-5">
           {/* Items */}
-          <div>
-            <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Your Items ({items.length})
-            </p>
-            <div className="space-y-2">
-              {items.map((i) => (
-                <div key={i.id} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-gray-800">
-                    <span className="text-lg">{i.emoji || "🛒"}</span>
-                    {i.name}
-                    <span className="text-gray-400 text-xs">× {i.quantity}</span>
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    ${i.line_total.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Your Items ({items.length})
+                </p>
 
+                <div className="space-y-2">
+                  {items.map((i) => {
+                    const availability = availabilityByProduct[i.id];
+
+                    return (
+                      <div
+                        key={i.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex flex-col min-w-0">
+                          <span className="flex items-center gap-2 text-gray-800">
+                            <span className="text-lg">{i.emoji || "🛒"}</span>
+                            <span className="truncate">{i.name}</span>
+                          </span>
+
+                          {/* Availability status */}
+                          {availability?.status === "loading" && (
+                            <span className="text-xs text-gray-400 ml-7 mt-0.5">
+                              Checking availability…
+                            </span>
+                          )}
+
+                          {availability?.status === "ready" && (
+                            <span className="text-xs text-gray-500 ml-7 mt-0.5">
+                              {availability.data.in_stock_for_quantity !== false ? (
+                                <>
+                                  Available for {i.quantity}
+                                </>
+                              ) : (
+                                <>
+                                  Only {availability.data.stock_quantity ?? 0} in stock
+                                </>
+                              )}
+
+                              {" · "}
+                              {orderType === "pickup" ? "Earliest pickup: " : "Earliest: "}
+                              {availability.data.earliest_delivery_date}
+                            </span>
+                          )}
+
+                          {availability?.status === "unavailable" && (
+                            <span className="text-xs text-red-500 ml-7 mt-0.5">
+                              Currently unavailable — no restock scheduled
+                            </span>
+                          )}
+
+                          {availability?.status === "error" && (
+                            <span className="text-xs text-red-500 ml-7 mt-0.5">
+                              Could not check availability
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 ml-3">
+                          <div className="flex items-center gap-1 bg-brand-500 text-white rounded-full px-1.5 py-1">
+                            <button
+                              onClick={() => onUpdateQty(i.id, -1)}
+                              className="p-1 hover:bg-brand-600 rounded-full"
+                            >
+                              <FiMinus size={12} />
+                            </button>
+
+                            <span className="text-xs font-bold w-4 text-center">
+                              {i.quantity}
+                            </span>
+
+                            <button
+                              onClick={() => onUpdateQty(i.id, 1)}
+                              className="p-1 hover:bg-brand-600 rounded-full"
+                            >
+                              <FiPlus size={12} />
+                            </button>
+                          </div>
+
+                          <span className="font-semibold text-gray-900">
+                            ${i.line_total.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
           {/* Order type */}
           <div>
             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -434,12 +725,13 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label flex items-center gap-1.5">
-                <FiCalendar size={13} className="text-gray-400" /> Delivery date
+                <FiCalendar size={13} className="text-gray-400" />
+                {orderType === "delivery" ? "Delivery date" : "Pickup date"}
               </label>
               <input
                 type="date"
                 className="input"
-                min={todayISO()}
+                min={earliestCartDeliveryDate || todayISO()}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
@@ -472,12 +764,17 @@ function CheckoutModal({ cart, products, onClose, onClearCart }) {
           </div>
 
           <button
-            className="btn-primary w-full flex items-center justify-center gap-2"
-            onClick={placeOrder}
-            disabled={placing || (orderType === "delivery" && !addressId)}>
-            <FiShoppingCart size={15} />
-            {placing ? "Placing order…" : `Place order · $${total.toFixed(2)}`}
-          </button>
+              className="btn-primary w-full flex items-center justify-center gap-2"
+              onClick={placeOrder}
+              disabled={
+                placing ||
+                (orderType === "delivery" && !addressId) ||
+                availabilityBlockedItems.length > 0
+              }
+            >
+              <FiShoppingCart size={15} />
+              {placing ? "Placing order…" : `Place order · $${total.toFixed(2)}`}
+            </button>
         </div>
       </div>
     </div>
