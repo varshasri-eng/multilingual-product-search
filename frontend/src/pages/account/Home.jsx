@@ -134,7 +134,7 @@ export default function Home() {
           <img
             src={settings.hero_banner_url}
             alt=""
-            className="w-full h-40 sm:h-56 object-cover"
+            className="w-full h-40 sm:h-48 object-cover"
             onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }}
           />
           {(settings.hero_title || settings.hero_subtitle) && (
