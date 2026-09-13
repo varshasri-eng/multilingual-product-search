@@ -38,7 +38,7 @@ export default function LandingPage() {
           <img
             src={settings.hero_banner_url}
             alt=""
-            className="w-full h-72 sm:h-96 object-cover"
+            className="w-full h-92 sm:h-96 object-cover"
             onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }}
           />
           <div className="absolute inset-0 bg-black/35 flex flex-col items-center
